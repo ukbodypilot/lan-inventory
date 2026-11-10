@@ -425,6 +425,8 @@ def main():
                 rec["reasons"] = [flag] + rec["reasons"]
         else:
             rec["name_reading"] = None
+        rec["name_also"] = [{"name": n, "source": src} for n, src in
+                            identify.name_rivals(rec["name"], rec["names"], rec["vendor"], rec["model"])] if rec["name_flags"] else []
         rec["owner"] = (rec["name_reading"] or {}).get("owner") or identify.owner_hint(rec["names"]) or ""
         out.append(rec)
     link_aliases(out)

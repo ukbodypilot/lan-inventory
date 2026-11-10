@@ -7,6 +7,8 @@ The version is the git tag. Releases before 2.0.0 were never tagged.
 - **Names are checked, not trusted.** Every name a device gives (its own API, AirPlay, DHCP, mDNS, UPnP, the router
   label) is kept per source. A device whose names point to different people, or claim a product or OS the hardware
   is not, gets a "name mismatch" tag and counts under "Needs attention".
+- **Both names shown.** A row with conflicting names shows them side by side, the rival in red; search matches
+  every name a device gives and the inferred owner.
 - **Rename alerts.** A device that changes one of its names, or a new device that arrives with a name another device
   already uses, is logged to the Devices stream and e-mailed (`state/names.json`).
 - **AI name reading** (`names_ai.py`). Claude, with no tools, decomposes the names into owner / thing / place and

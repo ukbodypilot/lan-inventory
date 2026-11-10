@@ -276,6 +276,23 @@ def owner_hint(claims):
     return None
 
 
+def name_rivals(shown, claims, manufacturer="", model=""):
+    """Names this device also gives that do not fit the one being shown: [(name, where it came from)], one per
+    distinct identity, so the page can put the conflicting names side by side."""
+    extra = name_tokens(" ".join((manufacturer or "", model or "")))
+    kept = [(shown or "", name_tokens(shown or "", extra))]
+    out = []
+    for src, nm in claims.items():
+        t = name_tokens(nm, extra)
+        if not t or any(any(x in norm_name(k) for x in t) or any(x in norm_name(nm) for x in kt) for k, kt in kept if kt):
+            continue
+        if not kept[0][1]:
+            continue  # the shown name identifies nobody, so nothing can conflict with it
+        kept.append((nm, t))
+        out.append((nm, src))
+    return out
+
+
 def name_check(claims, manufacturer="", model="", os_family="", dhcp_class=""):
     """Reasons to distrust a device's names, as text; [] when they hang together.
     claims is {where the name came from: name}. Two checks: a name that claims a product the hardware is not, and two

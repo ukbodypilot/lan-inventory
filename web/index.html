@@ -261,6 +261,11 @@
   function nowSec() { var g = ts(state.data.generated); return g || Date.now() / 1000; }
   function typeOf(d) { return d.type || 'Unidentified'; }
   function displayName(d) { return d.name || (d.randomized_mac ? 'Private-MAC device' : (d.vendor || 'Unknown device')); }
+  function alsoNames(d) {
+    return (d.name_also || []).map(function (n) {
+      return ' <span class="muted">/</span> <b style="color:var(--crit)" title="' + esc(n.source) + '">' + esc(n.name) + '</b>';
+    }).join('');
+  }
   function isNew(d) { var f = ts(d.first_seen); return f != null && nowSec() - f < 7 * 86400; }
   function attention(d) {
     var a = [];
@@ -288,7 +293,8 @@
   function searchText(d) {
     return [d.ip, d.mac, d.name, d.type, d.vendor, d.os, d.note, (d.aliases || []).join(' '),
       d.ports.map(function (p) { return p.port + ' ' + p.service + ' ' + p.product; }).join(' '),
-      d.mdns.join(' '), d.model, d.os_family, (d.web || []).join(' '), d.dhcp && d.dhcp.hostname].join(' ').toLowerCase();
+      d.mdns.join(' '), d.model, d.os_family, (d.web || []).join(' '), d.dhcp && d.dhcp.hostname,
+      Object.keys(d.names || {}).map(function (k) { return d.names[k]; }).join(' '), d.owner].join(' ').toLowerCase();
   }
   function visible() {
     var q = state.q.toLowerCase();
@@ -615,7 +621,7 @@
       var seen = ts(d.last_seen);
       html += '<tr class="row' + (d.online_now ? '' : ' off') + '" tabindex="0" data-mac="' + esc(d.mac) + '" aria-expanded="' + !!state.open[d.mac] + '">' +
         '<td><div class="dev"><span class="ic">' + icon(d.type) + '<span class="st' + (d.online_now ? ' on' : '') + '" title="' + (d.online_now ? 'online' : 'offline') + '"></span></span>' +
-        '<div class="nm"><b>' + esc(displayName(d)) + '</b>' + tags(d) + '<div class="m">' + esc(d.model || d.vendor || (d.randomized_mac ? 'no manufacturer (private MAC)' : '')) + '</div></div></div></td>' +
+        '<div class="nm"><b>' + esc(displayName(d)) + '</b>' + alsoNames(d) + tags(d) + '<div class="m">' + esc(d.model || d.vendor || (d.randomized_mac ? 'no manufacturer (private MAC)' : '')) + '</div></div></div></td>' +
         '<td class="mono"><span class="' + (d.ip_stale ? 'stale' : '') + '">' + esc(d.ip || '—') + '</span><div class="muted hide-sm" style="font-size:11.5px">' + esc(d.mac) + '</div></td>' +
         '<td class="hide-sm">' + confMeter(d) + esc(d.type || '—') + (d.os_family ? '<div class="muted" style="font-size:12.5px">' + esc(d.os_family) + '</div>' : '') + '</td>' +
         '<td class="hide-sm" style="white-space:nowrap">' + signal(d) + '</td>' +
