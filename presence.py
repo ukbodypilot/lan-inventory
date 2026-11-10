@@ -183,6 +183,14 @@ def main():
                 subprocess.run(build, check=True)
         except Exception as e:
             print("quick look: %s: %s" % (type(e).__name__, str(e)[:200]))
+    try:  # names that are new or changed get read (at most one call per NAMES_MIN_INTERVAL; none when nothing changed)
+        import names_ai
+        n = names_ai.refresh(auto=True)
+        if n:
+            print("names read: %d" % n)
+            subprocess.run(build, check=True)
+    except Exception as e:
+        print("names: %s: %s" % (type(e).__name__, str(e)[:200]))
 
 
 if __name__ == "__main__":

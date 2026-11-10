@@ -136,6 +136,8 @@
         if (e === 'ip_changed') return ['', dv + ' address ' + esc(r.was) + ' → <b>' + esc(r.ip) + '</b>'];
         if (e === 'online') return ['', dv + ' came online'];
         if (e === 'offline') return ['', dv + ' went offline'];
+        if (e === 'renamed') return ['bad', dv + ' renamed: ' + esc(r.detail || '')];
+        if (e === 'name_reused') return ['bad', dv + ': ' + esc(r.detail || '')];
         if (e === 'baseline') return ['', 'Presence history started with ' + (r.online || []).length + ' devices online'];
         break;
       case 'ping':

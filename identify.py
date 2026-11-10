@@ -8,6 +8,8 @@ a device answering its own vendor API outweighs a host name, which outweighs the
 vendor. For each field the best-supported value wins, agreeing sources add to it, and a strong source that
 disagrees with the winner lowers the confidence and is named in the reasons. Rule order does not matter.
 """
+import hashlib
+import json
 import os
 import re
 
@@ -66,7 +68,7 @@ DECO_CLIENT_TYPE = {"phone": "Phone", "tablet": "Tablet", "pc": "Computer", "lap
 # unambiguous. The most specific rule (earliest here) across all of a device's names is the one used.
 NAME_HINTS = [
     (r"^ring-?cam|ringcam", "Camera", "Ring camera", "ringcam"),
-    (r"^ring-[0-9a-f]{6,}$", "IoT", None, "Ring-<id> (Ring device)"),
+    (r"^ring-[0-9a-f]{6,}$", "Camera", "Ring camera", "Ring-<id> (Ring camera or doorbell)"),
     (r"^lg[_ -]?smart[_ -]?(laundry|washer|dryer)|smart[_ -]?laundry|^lg[_ -]?(washer|dryer)", "Appliance", "LG smart laundry appliance", "LG smart laundry"),
     (r"coffee[_ -]?maker|coffeemaker", "Appliance", None, "coffee maker"),
     (r"^brw[0-9a-f]{12}$", "Printer", None, "BRW<mac> (Brother printer)"),
@@ -212,6 +214,8 @@ def good_name(n):
     n = (n or "").strip()
     if not n or n.lower() in GENERIC_NAMES or DECO_PLACEHOLDER.match(n):
         return False
+    if re.fullmatch(r"(?i)(linux|none|android|localhost|iphone|ipad|mac)[-_ ]?\d{1,2}", n):
+        return False  # a generic host name with an mDNS de-duplication suffix
     if re.match(r"^[0-9a-f]{8}-[0-9a-f]{4}-", n.lower()) or re.fullmatch(r"[0-9a-f]{12}", n.lower()):
         return False  # uuid / bare MAC
     if re.fullmatch(r"(?i)mac-[0-9a-f]{6}", n) or (re.fullmatch(r"[A-Z0-9]{10,14}", n) and sum(c.isdigit() for c in n) >= 5):
@@ -225,6 +229,89 @@ def clean_name(n):
 
 def norm_name(n):
     return re.sub(r"[^a-z0-9]", "", (n or "").lower())
+
+
+# Words in a name that say what a thing is, not whose it is. They never make two names agree or disagree.
+NAME_NOISE = {"the", "and", "for", "desktop", "laptop", "phone", "iphone", "ipad", "macbook", "mac", "air", "pro", "mini", "neo", "tv",
+              "roku", "apple", "android", "galaxy", "pixel", "samsung", "xbox", "one", "echo", "dot", "series", "local", "home", "room",
+              "device", "streaming", "stick", "player", "smart", "wifi", "lan"}
+# A name that claims a product -> what the hardware must then be (matched against manufacturer, model and OS).
+NAME_CLAIMS = [(r"apple ?tv|iphone|ipad|macbook|imac|homepod", r"apple|ios|ipados|macos|tvos|audioos", "an Apple product"),
+               (r"chromecast|nest ?(hub|mini|audio)", r"google", "a Google product"),
+               (r"fire ?tv|\becho\b", r"amazon", "an Amazon product"),
+               (r"\bxbox", r"microsoft|xbox", "an Xbox"),
+               (r"playstation|\bps[45]\b", r"sony", "a PlayStation"),
+               (r"^(desktop|laptop)-[a-z0-9]{7}$", r"windows|microsoft|^$", "a Windows PC")]
+
+
+def name_tokens(n, extra=()):
+    """The identifying words of a name: lower-case, possessive dropped, product/brand words and numbers left out."""
+    n = re.sub(r"\(\d+\.\d+\.\d+\.\d+\)", " ", n or "")
+    if re.fullmatch(r"[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)?[-_](?=[0-9a-fA-F]*\d)[0-9a-fA-F]{4,12}", n.strip()):
+        return set()  # "Ring-4021e2", "Pura-2378": a factory name with a serial suffix says nothing about an owner
+    n = re.sub(r"(?<=[a-z])([A-Z])", r" \1", n)  # SamsRoku -> Sams Roku
+    out = set()
+    for t in re.split(r"[^a-z0-9’']+", n.lower()):
+        t = re.sub(r"[’']s?$", "", t).replace("’", "").replace("'", "")
+        if any(c.isdigit() for c in t) and len(t) < 6:
+            continue  # "55in", "bl602": a size or part number, not an identity
+        if len(t) >= 3 and not t.isdigit() and t not in NAME_NOISE and t not in extra:
+            out.add(t)
+    return out
+
+
+def names_hash(names, vendor="", model="", os_family=""):
+    """Changes when a device's names (or the hardware they are judged against) change; keys an AI name reading."""
+    return hashlib.sha256(json.dumps([sorted((names or {}).items()), vendor or "", model or "", os_family or ""]).encode()).hexdigest()[:16]
+
+
+def owner_hint(claims):
+    """The owner a possessive name points to ("Sam's Roku", "SamsRoku", "sams-iPad" -> "Sam"), or None. The rule-based
+    stand-in until names_ai.py has read the device."""
+    for nm in claims.values():
+        m = re.match(r"^([A-Za-z]{3,15})[’']s[ -_]", nm) or re.match(r"^([A-Z][a-z]{2,14})s(?=[-_ ]?[A-Z])", nm) \
+            or re.match(r"^([A-Za-z]{3,15})s[-_ ](?:i?phone|ipad|mac|air|roku|tv|pc|laptop|watch)", nm, re.I)
+        if m and m.group(1).lower() not in NAME_NOISE:
+            return m.group(1).capitalize()
+    return None
+
+
+def name_check(claims, manufacturer="", model="", os_family="", dhcp_class=""):
+    """Reasons to distrust a device's names, as text; [] when they hang together.
+    claims is {where the name came from: name}. Two checks: a name that claims a product the hardware is not, and two
+    names that share no identifying word (one device calling itself 'Aiko' here and 'Sam Roku' there)."""
+    flags = []
+    hw = " ".join(x or "" for x in (manufacturer, model, os_family)).lower()
+    osf = (os_family or "").lower() or ("chromeos" if "chromeos" in (dhcp_class or "").lower() else
+                                         "android" if "android" in (dhcp_class or "").lower() else "")
+    told = set()
+    for src, nm in claims.items():
+        if nm in told:
+            continue
+        told.add(nm)
+        for pat, need, what in NAME_CLAIMS:
+            if not re.search(pat, nm, re.I):
+                continue
+            if what == "a Windows PC":
+                if osf and not re.search(r"windows", osf):
+                    flags.append("%s '%s' is a Windows-style name, but the device runs %s" % (src, nm, os_family or osf))
+            elif hw.strip() and not re.search(need, hw):
+                flags.append("%s '%s' claims %s, but the hardware is %s" % (src, nm, what, model if model and manufacturer.lower() in model.lower() else (manufacturer + " " + (model or "")).strip()))
+            break
+    extra = name_tokens(" ".join((manufacturer or "", model or "")))
+    toks = [(src, nm, name_tokens(nm, extra)) for src, nm in claims.items()]
+    toks = [t for t in toks if t[2]]
+
+    def agree(a, b):
+        na, nb = norm_name(a[1]), norm_name(b[1])
+        return any(t in nb for t in a[2]) or any(t in na for t in b[2])
+    done = False
+    for x in range(len(toks)):
+        for y in range(x + 1, len(toks)):
+            if not done and not agree(toks[x], toks[y]):
+                flags.append("names disagree: %s is '%s', %s is '%s'" % (toks[x][0], toks[x][1], toks[y][0], toks[y][1]))
+                done = True
+    return flags
 
 
 def compatible(a, b):
@@ -243,6 +330,7 @@ class Idn:
     def __init__(self):
         self.cand = {f: [] for f in ("model", "manufacturer", "os_family", "type", "name")}  # (value, weight, source, why)
         self.notes = []  # (position, text) for facts that are not a proposal
+        self.claims = {}  # where a name came from -> the name, for name_check() and rename detection
         self.n = 0
 
     def set(self, field, value, why, source, strong=True, weight=None):
@@ -256,6 +344,7 @@ class Idn:
         n = clean_name(n)
         if good_name(n):
             self.set("name", n, why, source, weight=weight)
+            self.claims.setdefault(why.split(" '")[0], n)
 
     def note(self, text):
         self.n += 1
@@ -429,8 +518,12 @@ def identify(ev):
             # The Deco shows the DHCP host name (cut to 29 chars, punctuation dropped) until someone renames the
             # client in the app. A name that is not just the host name again was typed by a person.
             own = bool(hn) and (norm_name(hn).startswith(norm_name(nm)[:20]) or norm_name(nm) in norm_name(hn))
-            i.name_candidate(nm, "Deco router's device name for this client", "router", 30 if own or not hn else 70)
-            names.append((nm, "Deco device name"))
+            if own:
+                i.name_candidate(nm, "Deco router's device name for this client", "router", 30)
+                names.append((nm, "Deco device name"))
+            else:  # typed in the Deco app (or not provably the device's own): shown only when nothing was measured
+                i.claims["Deco app label"] = clean_name(nm)
+                i.name_candidate(nm, "Deco app label '%s' (may be typed by a person; used only when the device reports no name)" % nm, "router", 3)
         elif nm:
             i.note("Deco router has no real name for it (shows the placeholder '%s')" % nm)
         ct = DECO_CLIENT_TYPE.get(rc.get("client_type"))
@@ -598,6 +691,9 @@ def identify(ev):
             ordered.append(why)
     if conflict:
         ordered.insert(0, conflict)
+    name_flags = name_check(i.claims, out["manufacturer"] or "", out["model"] or "", out["os_family"] or "", dh.get("vendor_class") or "")
+    ordered = name_flags + ordered
     return {"model": out["model"], "manufacturer": out["manufacturer"], "os_family": out["os_family"], "type": out["type"],
             "type_source": tsrc if out["type"] else None, "name": out["name"], "confidence": conf if out["type"] else "low",
-            "reasons": ordered, "conflict": conflict}
+            "reasons": ordered, "conflict": conflict,
+            "names": dict(i.claims), "name_flags": name_flags}

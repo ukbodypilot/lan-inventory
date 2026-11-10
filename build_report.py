@@ -176,6 +176,49 @@ def load_findings():
     return fmac, fip
 
 
+def name_key(n):
+    return identify.norm_name(re.sub(r"\(\d+\.\d+\.\d+\.\d+\)", "", n or ""))
+
+
+def track_names(out):
+    """Remember every name each device has given (state/names.json) and report changes: a device that renames itself,
+    and a newly seen device that turns up with a name another device already uses. Logged to the 'devices' stream and
+    e-mailed (no voice). The first run only records a baseline."""
+    path = os.path.join(ROOT, "state", "names.json")
+    prev = jload(path, None)
+    known = prev or {}
+    events = []
+    for d in out:
+        mac, old = d["mac"], known.get(d["mac"])
+        cur = dict(old or {})
+        for src, nm in (d.get("names") or {}).items():
+            if old is not None and src in old and name_key(old[src]) != name_key(nm):
+                events.append(("renamed", d, "%s changed from '%s' to '%s'" % (src, old[src], nm)))
+            cur[src] = nm
+        if prev is not None and old is None and not d.get("aliases"):
+            for src, nm in (d.get("names") or {}).items():
+                k = name_key(nm)
+                twin = [m for m, names in known.items() if m != mac and len(k) >= 6 and any(name_key(x) == k for x in names.values())]
+                if twin:
+                    events.append(("name_reused", d, "new device uses the name '%s' (%s), already used by %s" % (nm, src, ", ".join(twin))))
+                    break
+        if cur:
+            known[mac] = cur
+    evidence.jsave(path, known)
+    if not events:
+        return
+    try:
+        import lan_log
+        import notify
+        for ev, d, text in events:
+            lan_log.event("devices", ev, mac=d["mac"], ip=d["ip"], name=d["name"], detail=text)
+        body = "\n".join("%s  %s  %s (%s %s)\n    %s" % (d["mac"], d["ip"], d["name"] or "(no name)", d["vendor"], d["model"] or d["type"], text)
+                         for _, d, text in events)
+        notify.notify("LAN: %d device name change%s" % (len(events), "" if len(events) == 1 else "s"), body, skip=("voicemonkey",))
+    except Exception as e:  # reporting must never break the build
+        print("track_names: %s: %s" % (type(e).__name__, str(e)[:160]))
+
+
 def link_aliases(out):
     """One device often shows up under several MACs (Wi-Fi + ethernet/dock, private + real address). MACs that share a
     specific host name are linked; a member with little evidence takes the identity of the best-known one."""
@@ -276,6 +319,7 @@ def main():
     fmac, fip = load_findings()
     router = router_clients()
     research = jload(os.path.join(ROOT, "state", "research.json"), {})
+    readings = jload(os.path.join(ROOT, "state", "name_reading.json"), {}).get("devices", {})
     icache = jload(os.path.join(ROOT, "state", "identity_cache.json"), {})
     if icache.get("_v") != identify.VERSION:  # identities cached under older rules are re-derived, not trusted
         icache = {"_v": identify.VERSION}
@@ -340,10 +384,11 @@ def main():
             reasons.append("Deco router still lists this client at %s (ARP says %s)" % (rc["ip"], ip))
         rec = {
             "ip": ip, "mac": mac, "randomized_mac": rnd, "vendor": vendor,
-            "name": f.get("name") or idn["name"] or "", "type": f.get("type") or idn["type"] or "", "type_verified": verified,
+            "name": idn["name"] or f.get("name") or "", "type": f.get("type") or idn["type"] or "", "type_verified": verified,
             "model": idn["model"] or "", "os_family": idn["os_family"] or "",
             "confidence": "curated" if curated and f.get("type") else idn["confidence"],
             "conflict": idn.get("conflict"),
+            "names": idn.get("names") or {}, "name_flags": idn.get("name_flags") or [],
             "ip_conflict": others or None,
             "ip_stale": bool(ip) and cur_holder != mac,  # someone else has been seen at this address since
             "ip_history": n.get("ip_history") or [],
@@ -370,8 +415,21 @@ def main():
                      "signal": any(k in pk for k in ("open_ports", "mdns_services", "upnp", "dhcp", "nmap_os_guess", "web"))}
         if mac in research:
             apply_research(rec, research[mac])
+        # what the names mean: the AI reading (names_ai.py) while it matches the current names, else the possessive rule
+        rd = readings.get(mac)
+        if rd and rd.get("hash") == identify.names_hash(rec["names"], rec["vendor"], rec["model"], rec["os_family"]):
+            rec["name_reading"] = {k: rd.get(k) for k in ("owner", "thing", "place", "mismatch", "note", "date")}
+            if rd.get("mismatch") and rd.get("note"):
+                flag = "AI reading of the names: " + rd["note"]
+                rec["name_flags"] = rec["name_flags"] + [flag]
+                rec["reasons"] = [flag] + rec["reasons"]
+        else:
+            rec["name_reading"] = None
+        rec["owner"] = (rec["name_reading"] or {}).get("owner") or identify.owner_hint(rec["names"]) or ""
         out.append(rec)
     link_aliases(out)
+    if not os.environ.get("NO_FINDINGS"):
+        track_names(out)
     for d in out:
         d.pop("_host"), d.pop("_mdns_host")
     out.sort(key=lambda d: (ip_key(d["ip"]), d["ip_stale"], d["mac"]))

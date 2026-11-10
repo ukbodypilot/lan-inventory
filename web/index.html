@@ -266,6 +266,7 @@
     var a = [];
     if (d.ip_conflict) a.push('IP conflict');
     if (d.conflict) a.push('evidence disagrees');
+    if (d.name_flags && d.name_flags.length) a.push('name mismatch');
     if (!d.identified) a.push('not identified');
     if (d.online_now && !d.in_scan) a.push('never scanned');
     return a;
@@ -566,6 +567,7 @@
     if (isNew(d)) t += '<span class="tag new">new</span>';
     if (d.ip_conflict) t += '<span class="tag crit">IP conflict</span>';
     if (d.conflict) t += '<span class="tag warn">evidence disagrees</span>';
+    if (d.name_flags && d.name_flags.length) t += '<span class="tag crit" title="' + esc(d.name_flags.join('\n')) + '">name mismatch</span>';
     if (d.aliases && d.aliases.length) t += '<span class="tag" title="the same device also appears under another MAC">+' + d.aliases.length + ' MAC</span>';
     if (d.randomized_mac) t += '<span class="tag" title="randomized / private MAC address">private MAC</span>';
     if (d.online_now && !d.in_scan) t += '<span class="tag warn">not scanned yet</span>';
@@ -573,7 +575,7 @@
   }
   function detail(d) {
     var why = (d.reasons || []).map(function (r) {
-      var cls = /outweighed|placeholder|weak guess/.test(r) ? 'no' : /disagrees|conflict/i.test(r) ? 'bad' : '';
+      var cls = /outweighed|placeholder|weak guess/.test(r) ? 'no' : /disagrees|conflict|claims an? |Windows-style|AI reading of the names/i.test(r) ? 'bad' : '';
       return '<li class="' + cls + '">' + esc(r) + '</li>';
     }).join('') || '<li class="no">No evidence yet.</li>';
     function row(k, v) { return v ? '<dt>' + k + '</dt><dd>' + v + '</dd>' : ''; }
@@ -586,6 +588,10 @@
         row('Type', esc(d.type || '—') + (d.type_source ? ' <span class="muted">from ' + esc(d.type_source) + '</span>' : '')) +
         row('Confidence', confMeter(d) + esc(d.confidence || 'none')) + row('Model', esc(d.model)) + row('Manufacturer', esc(d.vendor)) +
         row('OS', esc(d.os_family || '')) + (d.os ? row('OS (nmap)', esc(d.os + ' — ' + d.os_accuracy + '%')) : '') +
+        row('Owner (from names)', esc(d.owner || '')) +
+        row('Names say', d.name_reading ? esc([d.name_reading.thing, d.name_reading.place].filter(Boolean).join(', ')) : '') +
+        row('Name reading (AI)', d.name_reading && d.name_reading.note ? '<span' + (d.name_reading.mismatch ? ' style="color:var(--crit)"' : '') + '>' + esc(d.name_reading.note) + '</span>' : '') +
+        row('Names given', Object.keys(d.names || {}).map(function (k) { return esc(d.names[k]) + ' <span class="muted">' + esc(k) + '</span>'; }).join('<br>')) +
         row('Label', d.note ? esc(d.note + '  [' + d.note_source + ', ' + d.note_date + ']') : '') + row('Research (AI)', esc(research)) +
       '</dl></div>' +
       '<div class="card dcard"><h3>Why we think so</h3><ul class="why">' + why + '</ul></div>' +

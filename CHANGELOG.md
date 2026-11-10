@@ -2,6 +2,20 @@
 
 The version is the git tag. Releases before 2.0.0 were never tagged.
 
+## Unreleased
+
+- **Names are checked, not trusted.** Every name a device gives (its own API, AirPlay, DHCP, mDNS, UPnP, the router
+  label) is kept per source. A device whose names point to different people, or claim a product or OS the hardware
+  is not, gets a "name mismatch" tag and counts under "Needs attention".
+- **Rename alerts.** A device that changes one of its names, or a new device that arrives with a name another device
+  already uses, is logged to the Devices stream and e-mailed (`state/names.json`).
+- **AI name reading** (`names_ai.py`). Claude, with no tools, decomposes the names into owner / thing / place and
+  flags contradictions. Runs from the presence pass only when names changed. It sends device-given names to Claude;
+  `NAMES_AI=0` switches it off.
+- **Measured names win.** A name the device reports now beats a hand label in `findings.json`, and a name typed in
+  the Deco app is used only when the device reports none.
+- `Ring-<id>` host names are typed as cameras; `linux-2` / `none-2` style host names are no longer used as names.
+
 ## 2.0.0 - 2026-11-09
 
 Identification rebuilt around the MAC address, and a new Devices page.

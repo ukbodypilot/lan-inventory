@@ -66,5 +66,26 @@ class Rules(unittest.TestCase):
         self.assertEqual((r["type"], r["confidence"]), ("IoT", "low"))
 
 
+class Names(unittest.TestCase):
+    def test_two_owners_on_one_device(self):
+        f = identify.name_check({"Roku device name": "Aiko", "Deco app label": "Sam Roku", "AirPlay device name": "Roku"}, "Roku")
+        self.assertEqual(len(f), 1)
+        self.assertIn("names disagree", f[0])
+
+    def test_name_claims_another_product(self):
+        f = identify.name_check({"AirPlay device name": "Den Apple TV"}, "Roku", "Roku Express 4K+ (3941X2)", "Roku OS")
+        self.assertTrue(any("claims an Apple product" in x for x in f))
+        f = identify.name_check({"DHCP hostname": "DESKTOP-AB12CD3"}, "Pegatron", "", "", "chromeos")
+        self.assertTrue(any("Windows-style" in x for x in f))
+
+    def test_ordinary_names_pass(self):
+        ok = [({"DHCP hostname": "Ring-4021e2", "Deco app label": "ringcam-frontdoor"}, "Texas Instruments", "Ring camera"),
+              ({"AirPlay device name": "55in TCL Roku TV", "DHCP hostname": "55TCLRokuTV"}, "TCL", "TCL 55S525"),
+              ({"AirPlay device name": "Sam’s MacBook Air", "DHCP hostname": "Sams-Air"}, "Apple, Inc.", "Mac17,4"),
+              ({"DHCP hostname": "DESKTOP-AB12CD3", "NetBIOS name": "DESKTOP-AB12CD3"}, "Intel Corporate", "")]
+        for claims, man, model in ok:
+            self.assertEqual(identify.name_check(claims, man, model, "macOS" if "Mac" in model else ""), [], claims)
+
+
 if __name__ == "__main__":
     unittest.main()
