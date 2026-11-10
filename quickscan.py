@@ -89,6 +89,16 @@ def scan_missing(presence, online, self_mac, limit=1):
     """Look at up to `limit` online devices that have no scan evidence. `presence` is mac -> record, `online` the
     MACs seen this pass. Newest arrivals first. Returns the MACs looked at."""
     scans = evidence.load_scans()
+    done = []
+    rl_path = os.path.join(ROOT, "state", "relook.json")
+    relook = evidence.jload(rl_path, [])  # devices that renamed themselves (build_report.track_names): ask them again
+    for mac in [m for m in relook if m in online and m != self_mac][:limit]:
+        r = presence.get(mac) or {}
+        if r.get("ip") and look(r["ip"], mac, r.get("vendor", "")) is not None:
+            evidence.jsave(rl_path, [m for m in relook if m != mac])
+            done.append(mac)
+    if done:
+        return done
     todo = []
     for mac in online:
         r = presence.get(mac) or {}
@@ -100,7 +110,6 @@ def scan_missing(presence, online, self_mac, limit=1):
         if q and (q.get("ports") or evidence.age_days(q.get("stamp")) < RETRY_DAYS):
             continue
         todo.append((r.get("first_seen", ""), mac))
-    done = []
     for _, mac in sorted(todo, reverse=True)[:limit]:
         r = presence[mac]
         rec = look(r["ip"], mac, r.get("vendor", ""))

@@ -188,12 +188,16 @@ def track_names(out):
     prev = jload(path, None)
     known = prev or {}
     events = []
+    rl_path = os.path.join(ROOT, "state", "relook.json")
+    was = set(jload(rl_path, []))
+    relook = set(was)
     for d in out:
         mac, old = d["mac"], known.get(d["mac"])
         cur = dict(old or {})
         for src, nm in (d.get("names") or {}).items():
             if old is not None and src in old and name_key(old[src]) != name_key(nm):
                 events.append(("renamed", d, "%s changed from '%s' to '%s'" % (src, old[src], nm)))
+                relook.add(mac)  # its other names may have changed too: have quickscan ask it again
             cur[src] = nm
         if prev is not None and old is None and not d.get("aliases"):
             for src, nm in (d.get("names") or {}).items():
@@ -205,6 +209,8 @@ def track_names(out):
         if cur:
             known[mac] = cur
     evidence.jsave(path, known)
+    if relook != was:
+        evidence.jsave(rl_path, sorted(relook))
     if not events:
         return
     try:
@@ -319,6 +325,7 @@ def main():
     fmac, fip = load_findings()
     router = router_clients()
     research = jload(os.path.join(ROOT, "state", "research.json"), {})
+    pending_relook = set(jload(os.path.join(ROOT, "state", "relook.json"), []))
     readings = jload(os.path.join(ROOT, "state", "name_reading.json"), {}).get("devices", {})
     icache = jload(os.path.join(ROOT, "state", "identity_cache.json"), {})
     if icache.get("_v") != identify.VERSION:  # identities cached under older rules are re-derived, not trusted
@@ -352,16 +359,32 @@ def main():
             continue
         vendor = "" if rnd else (identify.manuf_lookup(mac) or n.get("vendor") or h.get("scan_vendor") or "")
         pdhcp = pv["dhcp"]
-        recs = merge_mdns(h.get("mdns_records", []), pv["mdns_records"])
+        # the listener is the newer witness: a sweep's record of a service the listener has heard since the sweep
+        # only survives if the device still announces that instance (a renamed device stops announcing the old name)
+        now_inst = {(r["svc"], r["instance"]) for r in pv["mdns_records"]}
+        swept = [r for r in h.get("mdns_records", [])
+                 if (r["svc"], r["instance"]) in now_inst or not (scan_at and pv["mdns_heard"].get(r["svc"], "") > scan_at)]
+        stale_svc = {r["svc"] for r in h.get("mdns_records", []) if r not in swept}
+        recs = merge_mdns(swept, pv["mdns_records"])
+        probes = dict(h.get("probes") or {})
+        if "_airplay._tcp" in stale_svc and isinstance(probes.get("airplay"), dict):
+            probes["airplay"] = {k: v for k, v in probes["airplay"].items() if k != "name"}  # its AirPlay name has changed since
         ss = dict(pv["ssdp"])
+        newer_ssdp = bool(pv["ssdp"].get("description")) and scan_at and (pv.get("ssdp_at") or "") > scan_at
         for k, v in (h.get("ssdp") or {}).items():
-            if v:
+            if v and not (k == "description" and newer_ssdp):
                 ss[k] = v
+        if mac in pending_relook:
+            # it renamed itself after this evidence was taken and has not been asked again yet: what the old answers
+            # say it is still holds, the names in them do not
+            probes = {k: ({f: v for f, v in p.items() if f not in evidence.NAME_FIELDS} if isinstance(p, dict) else p) for k, p in probes.items()}
+            if isinstance(ss.get("description"), dict) and not newer_ssdp:
+                ss["description"] = {k: v for k, v in ss["description"].items() if k not in evidence.NAME_FIELDS}
         rc = router.get(mac)
         ev = {
             "ports": h.get("ports", []), "scripts": h.get("scripts", {}), "os": h.get("os"), "osclass": h.get("osclass"),
             "mdns_records": recs, "mdns_host": h.get("mdns_host") or pv["mdns_host"], "ssdp": ss,
-            "probes": h.get("probes") or {}, "kasa": h.get("kasa"), "tuya": h.get("tuya"), "dhcp": pdhcp,
+            "probes": probes, "kasa": h.get("kasa"), "tuya": h.get("tuya"), "dhcp": pdhcp,
             "vendor": vendor, "randomized": rnd, "seed_name": n.get("name_guess"), "router_client": rc,
         }
         idn = identify.identify(ev)

@@ -244,8 +244,20 @@ NAME_CLAIMS = [(r"apple ?tv|iphone|ipad|macbook|imac|homepod", r"apple|ios|ipado
                (r"^(desktop|laptop)-[a-z0-9]{7}$", r"windows|microsoft|^$", "a Windows PC")]
 
 
+class HW(set):
+    """Words of the measured hardware (manufacturer + model), plus the run-together form for substring tests."""
+
+    def __init__(self, manufacturer="", model=""):
+        text = " ".join((manufacturer or "", model or ""))
+        self.norm = norm_name(text)
+        super().__init__(name_tokens(text))
+
+
 def name_tokens(n, extra=()):
     """The identifying words of a name: lower-case, possessive dropped, product/brand words and numbers left out."""
+    if isinstance(extra, HW):
+        if len(norm_name(n)) >= 4 and norm_name(n) in extra.norm:
+            return set()  # "RokuExpress4K" on a Roku Express 4K+: the product's own name
     n = re.sub(r"\(\d+\.\d+\.\d+\.\d+\)", " ", n or "")
     if re.fullmatch(r"[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)?[-_](?=[0-9a-fA-F]*\d)[0-9a-fA-F]{4,12}", n.strip()):
         return set()  # "Ring-4021e2", "Pura-2378": a factory name with a serial suffix says nothing about an owner
@@ -279,7 +291,7 @@ def owner_hint(claims):
 def name_rivals(shown, claims, manufacturer="", model=""):
     """Names this device also gives that do not fit the one being shown: [(name, where it came from)], one per
     distinct identity, so the page can put the conflicting names side by side."""
-    extra = name_tokens(" ".join((manufacturer or "", model or "")))
+    extra = HW(manufacturer, model)
     kept = [(shown or "", name_tokens(shown or "", extra))]
     out = []
     for src, nm in claims.items():
@@ -315,7 +327,7 @@ def name_check(claims, manufacturer="", model="", os_family="", dhcp_class=""):
             elif hw.strip() and not re.search(need, hw):
                 flags.append("%s '%s' claims %s, but the hardware is %s" % (src, nm, what, model if model and manufacturer.lower() in model.lower() else (manufacturer + " " + (model or "")).strip()))
             break
-    extra = name_tokens(" ".join((manufacturer or "", model or "")))
+    extra = HW(manufacturer, model)
     toks = [(src, nm, name_tokens(nm, extra)) for src, nm in claims.items()]
     toks = [t for t in toks if t[2]]
 

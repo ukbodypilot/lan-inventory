@@ -9,6 +9,9 @@ The version is the git tag. Releases before 2.0.0 were never tagged.
   is not, gets a "name mismatch" tag and counts under "Needs attention".
 - **Both names shown.** A row with conflicting names shows them side by side, the rival in red; search matches
   every name a device gives and the inferred owner.
+- **Replaced names expire.** A service name is dropped once the device announces another name for the same
+  service; an old sweep's names no longer override newer announcements; a rename queues a fresh look at the
+  device (`state/relook.json`) and older answers lose their names until it succeeds.
 - **Rename alerts.** A device that changes one of its names, or a new device that arrives with a name another device
   already uses, is logged to the Devices stream and e-mailed (`state/names.json`).
 - **AI name reading** (`names_ai.py`). Claude, with no tools, decomposes the names into owner / thing / place and

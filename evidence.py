@@ -82,22 +82,38 @@ def passive(mac, hosts):
     """Identification evidence passive.py holds for one MAC, in the shape identify() takes."""
     h = hosts.get(mac) or {}
     m = h.get("mdns") or {}
-    recs, plain = [], []
+    recs, plain, heard = [], [], {}
     for name, ts in sorted((m.get("names") or {}).items()):
         if age_days(ts) > NAME_DAYS:
             continue
         s = SVC.match(name)
         if s and not s.group(1).startswith("_"):
-            recs.append({"svc": s.group(2).lower(), "instance": unescape(s.group(1)), "txt": (m.get("txt") or {}).get(name, {})})
+            recs.append({"svc": s.group(2).lower(), "instance": unescape(s.group(1)), "txt": (m.get("txt") or {}).get(name, {}), "_ts": ts})
+            heard[s.group(2).lower()] = max(heard.get(s.group(2).lower(), ""), ts)
         elif not s and name.endswith(".local"):
             plain.append(name[:-6])
+    # A renamed device announces its service under the new name and never mentions the old one again. An instance
+    # last heard well before another of the same service type has been replaced, not joined.
+    recs = [r for r in recs if not superseded(r["_ts"], heard[r["svc"]])]
+    for r in recs:
+        del r["_ts"]
     host = m.get("host") or (plain[0] if len(plain) == 1 else None)
     s = h.get("ssdp") or {}
     ssdp = {"server": s.get("server", ""), "st": s.get("types", [])} if s else {}
     if s.get("description"):
         ssdp["description"] = s["description"]
     return {"dhcp": h.get("dhcp") or {}, "mdns_records": recs, "mdns_host": host, "ssdp": ssdp,
+            "mdns_heard": heard, "ssdp_at": s.get("description_at"),
             "ip": h.get("ip"), "ips": h.get("ips") or {}, "last_seen": h.get("last_seen"), "via": h.get("via") or {}}
+
+
+def superseded(ts, newest, margin=3600):
+    """True when `ts` is more than `margin` seconds older than `newest` (both ISO stamps)."""
+    a, b = parse_ts(ts or ""), parse_ts(newest or "")
+    return bool(a and b and (b - a).total_seconds() > margin)
+
+
+NAME_FIELDS = ("name", "user-device-name", "friendly-device-name", "alias", "friendlyName", "fn")
 
 
 # ---------------------------------------------------------------- nmap / avahi parsers (per IP, as the tools write them)
@@ -272,9 +288,14 @@ def scan_for(mac, scans):
         q = None
     if deep and q and q["stamp"] > deep[1]:
         h = dict(deep[0])
-        for k in ("probes", "kasa"):
-            if q.get(k) and not h.get(k):
-                h[k] = q[k]
+        if q.get("kasa"):
+            h["kasa"] = q["kasa"]
+        if q.get("probes") or q.get("ports"):
+            # the newer look wins probe by probe; an older answer the device did not repeat keeps its facts but not
+            # its names, which may have been changed since
+            old = {k: ({f: v for f, v in p.items() if f not in NAME_FIELDS} if isinstance(p, dict) else p)
+                   for k, p in (h.get("probes") or {}).items()}
+            h["probes"] = {**old, **(q.get("probes") or {})}
         if q.get("ports") and not h.get("ports"):
             h.update({k: q[k] for k in ("ports", "scripts", "web") if q.get(k)})
         return h, deep[1], "sweep " + deep[2]
