@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings · LAN Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="nav.css">
+<link rel="stylesheet" href="console.css">
+<style>
+  .key { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-bottom: 18px; font-size: 13px; color: var(--fg2); }
+  .key span.i { display: inline-flex; align-items: center; gap: 6px; }
+  .layout { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+  .col { flex: 999 1 600px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+  .side { flex: 1 1 340px; display: flex; flex-direction: column; gap: 14px; position: sticky; top: 16px; }
+  .grp { margin: 6px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--mut); font-weight: 600; }
+  .set { padding: 16px 18px; }
+  .set .hd { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+  .set h3 { margin: 0; font-size: 16px; font-weight: 600; }
+  .set .hd .end { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .set .desc { margin: 6px 0 0; font-size: 14px; color: var(--mut); overflow-wrap: anywhere; }
+  .set.noop { background: var(--off-bg); border-style: dashed; }
+  .set .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
+  .set .pend { font-size: 13px; color: var(--acc-strong); font-weight: 500; }
+  .set details { margin-top: 10px; font-size: 13px; }
+  .set details summary { cursor: pointer; color: var(--mut); }
+  .status { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+  table.data.mini td, table.data.mini th { padding: 6px 8px; font-size: 13px; }
+  .addrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: flex-end; }
+  .addrow input { flex: none; }
+  .results { display: flex; flex-direction: column; gap: 10px; }
+  .results .card { padding: 14px 16px; }
+  .results .card.ok { border-color: var(--ok-line); } .results .card.bad { border-color: var(--bad-line); }
+  .idle { padding: 16px 18px; color: var(--mut); font-size: 14px; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div class="pagehead" id="pagehead"></div>
+  <div id="banner" role="alert"></div>
+  <div class="key" aria-label="What the badges mean">
+    <span class="i"><span class="badge ok">verified</span>proven on this router, with read-back</span>
+    <span class="i"><span class="badge">tested upstream</span>seen working in app captures, not yet here</span>
+    <span class="i"><span class="badge warn">unverified</span>guessed opcode, may do nothing</span>
+  </div>
+  <div class="layout">
+    <div class="col" id="col"></div>
+    <aside class="side" aria-label="Review change">
+      <section class="review" id="review" aria-live="polite"></section>
+      <div class="card idle" id="idle">Change a setting and its review appears here: what changes, how proven the write is, and after applying, what the router reports back.</div>
+      <div class="results" id="results" aria-live="polite"></div>
+    </aside>
+  </div>
+</main>
+<script src="console.js"></script>
+<script>
+(function () {
+  'use strict';
+  var esc = LC.esc, $ = LC.$, model = null, values = {}, live = {};
+  var REDACTED = '***REDACTED***';
+
+  function hhmm(min) { min = Number(min) || 0; return ('0' + Math.floor(min / 60) % 24).slice(-2) + ':' + ('0' + min % 60).slice(-2); }
+  function mins(s) { var p = (s || '0:0').split(':'); return Number(p[0]) * 60 + Number(p[1]); }
+
+  // How each setting is presented. Anything not covered here still gets the Advanced JSON editor.
+  var UI = {
+    doh: { group: 'net', title: 'DNS-over-HTTPS', toggle: 'enable',
+      desc: function (v) { return (v.enable ? 'On' : 'Off') + '. Servers' + (v.enable ? '' : ' if enabled') + ': ' + ((v.config || {}).dns_server || []).join(', '); } },
+    dns_servers: { group: 'net', title: 'DNS servers',
+      desc: function (v) { return v.is_auto ? 'Automatic (handed out by the gateway).' : 'Custom: ' + (v.server_list || []).join(', '); } },
+    upnp: { group: 'net', title: 'UPnP', toggle: 'enable',
+      desc: function (v) { return (v.enable ? 'On' : 'Off') + '. Lets devices open their own port forwards.'; } },
+    ddns: { group: 'net', title: 'Dynamic DNS', toggle: 'ddns_enable',
+      status: function (v) { var s = (v.ddns_info || {}).connection_status; return s ? [s === 'success' ? 'ok' : 'warn', s === 'success' ? 'connected' : s] : null; },
+      desc: function (v) { var i = v.ddns_info || {}; return (i.mode === 'tp_link' ? 'TP-Link DDNS' : i.mode || '') + (i.domain_name ? ' · ' + i.domain_name : ''); } },
+    ipv6: { group: 'net', title: 'IPv6', toggle: 'enable_ipv6',
+      desc: function (v) { return (v.enable_ipv6 ? 'On' : 'Off') + '. Changing this can drop the internet connection for a minute.'; } },
+    ieee_802_11r: { group: 'net', title: '802.11r fast roaming', toggle: 'enable' },
+    internet_backup: { group: 'net', title: 'Internet backup', toggle: 'enable',
+      desc: function (v) { return (v.enable ? 'On' : 'Off') + '. Fails over to a phone hotspot when the WAN drops. ' + ((v.hotspot_list || []).length) + ' hotspot(s) saved; their passwords are never sent from this page.'; } },
+    qos_bandwidth: { group: 'net', title: 'QoS bandwidth', toggle: 'enable',
+      fields: [['upstream_bandwidth', 'Upload limit (kbps)', 'number'], ['downstream_bandwidth', 'Download limit (kbps)', 'number']] },
+    led_schedule: { group: 'hw', title: 'LED night mode', toggle: 'enable_night_mode',
+      fields: [['time_begin', 'Lights off from', 'time'], ['time_end', 'Until', 'time']],
+      desc: function (v) { return v.enable_night_mode ? 'Lights off ' + hhmm(v.time_begin) + '–' + hhmm(v.time_end) + '.' : 'Off. LEDs stay on all day.'; } },
+    wps: { group: 'hw', title: 'WPS',
+      desc: function (v) { var l = v.wps_list || []; return l.length + ' node(s), ' + l.filter(function (x) { return x.wps_state !== 'idle'; }).length + ' active.'; } },
+    access_control_mode: { group: 'hw', title: 'Access control mode',
+      fields: [['access_control_mode', 'Mode', 'text']],
+      desc: function (v) { return 'Mode ' + v.access_control_mode + (v.guest_network_access ? ', guest network allowed' : '') + '.'; } },
+    homeshield: { group: 'hw', title: 'HomeShield protection',
+      desc: function (v) { return Object.keys(v).map(function (k) { return k.replace(/_/g, ' ') + ' ' + (v[k] ? 'on' : 'off'); }).join(', ') +
+        '. The router accepts writes here but changes nothing; it seems to need a HomeShield subscription in the Deco app. Shown read-only.'; } },
+    reservations: { group: 'lists', title: 'DHCP reservations', cols: [['mac', 'MAC'], ['ip', 'IP']], add: [['mac', 'MAC (AA-BB-…)'], ['ip', 'IP']] },
+    port_forwarding: { group: 'lists', title: 'Port forwarding',
+      cols: [['service_name', 'Service', true], ['protocol', 'Proto'], ['external_port', 'External'], ['internal_ip', 'To'], ['internal_port', 'Port']] },
+    access_control_white_list: { group: 'lists', title: 'Access control list', cols: [['mac', 'MAC'], ['name', 'Name', true]], add: [['mac', 'MAC (AA-BB-…)']],
+      wrap: true }
+  };
+  var GROUPS = [['net', 'Network'], ['hw', 'Hardware and security'], ['lists', 'Lists']];
+
+  function hasRedacted(v) { return JSON.stringify(v).indexOf(REDACTED) >= 0; }
+  // Whole-object write = current value with edits applied, minus any top-level key holding a redacted secret.
+  function writable(v) {
+    var out = {}; Object.keys(v).forEach(function (k) { if (!hasRedacted(v[k])) out[k] = v[k]; }); return out;
+  }
+  function diffKeys(a, b) {
+    return Object.keys(Object.assign({}, a, b)).filter(function (k) { return !LC.same(a[k], b[k]); });
+  }
+
+  // A new snapshot replaces every value, except ones read live that the snapshot doesn't carry.
+  function ingest(m) {
+    model = m;
+    Object.keys(m.raw.settings || {}).forEach(function (name) {
+      var v = m.res(name);
+      if (v != null || !live[name]) { values[name] = v; delete live[name]; }
+    });
+  }
+
+  function render() {
+    var m = model;
+    var html = GROUPS.map(function (g) {
+      var names = Object.keys(m.raw.settings || {}).filter(function (n) { return (UI[n] || { group: 'net' }).group === g[0]; });
+      return names.length ? '<h2 class="grp">' + g[1] + '</h2>' + names.map(card).join('') : '';
+    }).join('');
+    $('col').innerHTML = html;
+  }
+
+  function card(name) {
+    var s = model.raw.settings[name], ui = UI[name] || { title: s.label }, v = values[name];
+    var noop = s.tier === 'noop';
+    var head = '<div class="hd"><h3>' + esc(ui.title || s.label) + '</h3>' + LC.tierBadge(s.kind === 'list' ? listTier(s, 'add') : s.tier) + ' ' + LC.riskBadge(s.risk) + '<div class="end">';
+    if (v && ui.status) { var st = ui.status(v); if (st) head += '<span class="status" style="color:var(--' + st[0] + ')"><span class="dot ' + st[0] + '"></span>' + esc(st[1]) + '</span>'; }
+    if (v && ui.toggle && !noop && s.kind === 'object')
+      head += '<button type="button" class="toggle" data-name="' + name + '" data-toggle="' + ui.toggle + '" aria-pressed="' + !!v[ui.toggle] + '" aria-label="' + esc(ui.title) + '"></button>';
+    head += '</div></div>';
+    if (v == null) {
+      return '<section class="card set" id="set-' + name + '">' + head + '<p class="desc">Not read yet. Use Refresh now for a full read, or read just this one.</p>' +
+        '<div class="acts"><button type="button" class="btn" data-live="' + name + '">Read it from the router</button></div></section>';
+    }
+    var asOf = model.stale(name) && !live[name] && model.fullGenerated ? ' <span class="mut small">(as of the full read at ' + LC.fmtTime(model.fullGenerated) + ')</span>' : '';
+    var body = '<p class="desc">' + esc(ui.desc ? ui.desc(v) : '') + asOf + '</p>';
+    if (s.kind === 'list') body = listBody(name, s, ui, v);
+    else if (!noop) {
+      if (ui.fields) body += '<div class="fields">' + ui.fields.map(function (f) {
+        var val = f[2] === 'time' ? hhmm(v[f[0]]) : v[f[0]];
+        return '<label class="field">' + esc(f[1]) + '<input type="' + f[2] + '" data-name="' + name + '" data-field="' + f[0] + '" data-kind="' + f[2] + '" value="' + esc(val) + '"' +
+          (f[2] === 'number' ? ' inputmode="numeric"' : '') + '></label>';
+      }).join('') + '</div>';
+      body += '<details><summary>All fields (JSON)</summary><label class="sr-only" for="json-' + name + '">' + esc(ui.title) + ' as JSON</label>' +
+        '<textarea id="json-' + name + '" rows="5" data-json="' + name + '">' + esc(JSON.stringify(v, null, 1)) + '</textarea>' +
+        (hasRedacted(v) ? '<p class="note">Fields shown as ' + REDACTED + ' are secrets; they are left out of any write.</p>' : '') + '</details>';
+      body += '<div class="acts"><button type="button" class="btn" data-review="' + name + '">Review change</button><span class="pend" id="pend-' + name + '"></span></div>';
+    }
+    return '<section class="card set' + (noop ? ' noop' : '') + '" id="set-' + name + '">' + head + body + '</section>';
+  }
+
+  function listTier(s, op) { return s[op + '_verified'] ? 'verified' : s.tier; }
+  function listRows(v) { var k = Object.keys(v).filter(function (k) { return Array.isArray(v[k]); })[0]; return k ? v[k] : []; }
+  function listBody(name, s, ui, v) {
+    var rows = listRows(v), cols = ui.cols || Object.keys(rows[0] || {}).map(function (k) { return [k, k]; });
+    var t = rows.length ? '<div class="tablebox" style="margin-top:10px"><table class="data mini"><thead><tr>' +
+      cols.map(function (c) { return '<th>' + esc(c[1]) + '</th>'; }).join('') + '<th></th></tr></thead><tbody>' +
+      rows.map(function (r, i) {
+        return '<tr>' + cols.map(function (c) { return '<td class="mono">' + esc(c[2] ? LC.text(r[c[0]]) : r[c[0]]) + '</td>'; }).join('') +
+          '<td class="num">' + (s.remove ? '<button type="button" class="btn danger" style="min-height:36px" data-remove="' + name + '" data-i="' + i + '">Remove</button>' : '') + '</td></tr>';
+      }).join('') + '</tbody></table></div>' : '<p class="desc">Empty' + (v.max_count || v.reservation_list_max_count || v.port_forwarding_list_max_count ? ' (room for ' +
+        (v.max_count || v.reservation_list_max_count || v.port_forwarding_list_max_count) + ')' : '') + '.</p>';
+    if (!s.add) return t;
+    var add = ui.add ? '<div class="addrow">' + ui.add.map(function (f) {
+      return '<label class="field">' + esc(f[1]) + '<input type="text" data-add="' + name + '" data-field="' + f[0] + '"></label>';
+    }).join('') + '<button type="button" class="btn" data-addgo="' + name + '">Add…</button></div>'
+      : '<details><summary>Add an entry (JSON)</summary><textarea rows="5" data-addjson="' + name + '">' + esc(JSON.stringify(template(rows), null, 1)) +
+        '</textarea><div class="acts"><button type="button" class="btn" data-addgo="' + name + '">Add…</button></div></details>';
+    return t + add;
+  }
+  function template(rows) {
+    var r = Object.assign({}, rows[0] || {}); delete r.port_forwarding_id; Object.keys(r).forEach(function (k) { r[k] = ''; }); return r;
+  }
+
+  // ---- collecting an edit and opening the review
+  function edited(name) {
+    var base = values[name], ui = UI[name] || {}, next;
+    var ta = document.querySelector('[data-json="' + name + '"]');
+    try { next = ta ? JSON.parse(ta.value) : JSON.parse(JSON.stringify(base)); }
+    catch (e) { throw new Error('The JSON for this setting is not valid: ' + e.message); }
+    (ui.fields || []).forEach(function (f) {
+      var inp = document.querySelector('input[data-name="' + name + '"][data-field="' + f[0] + '"]'); if (!inp) return;
+      var val = f[2] === 'time' ? mins(inp.value) : f[2] === 'number' ? Number(inp.value) : inp.value;
+      if (!LC.same(val, f[2] === 'time' ? base[f[0]] : base[f[0]])) next[f[0]] = val;
+    });
+    return next;
+  }
+
+  function openReview(name, next) {
+    var s = model.raw.settings[name], ui = UI[name] || {}, base = values[name];
+    var keys = diffKeys(base, next);
+    if (!keys.length) { pend(name, 'Nothing changed.'); return; }
+    var params = writable(next);
+    var verifyKeys = keys.filter(function (k) { return k in params; });
+    pend(name, 'Pending change · see review panel');
+    $('idle').hidden = true;
+    LC.review({
+      box: $('review'), title: ui.title || s.label, write: s.write, tier: s.tier, risk: s.risk,
+      diff: keys.map(function (k) { return [k, base[k], next[k]]; }), params: params,
+      verify: LC.verifyFields(verifyKeys),
+      onCancel: function () { pend(name, ''); resetIdle(); render(); },
+      onDone: function (after, v) { done(name, after, v); }
+    });
+  }
+
+  function openListWrite(name, op, params, title, check) {
+    var s = model.raw.settings[name];
+    $('idle').hidden = true;
+    LC.review({
+      box: $('review'), title: title, write: s[op], tier: listTier(s, op), risk: s.risk,
+      diff: [[op, '', JSON.stringify(params)]], params: params,
+      verify: function (after) { return check(listRows(after || {})); },
+      onCancel: resetIdle,
+      onDone: function (after, v) { done(name, after, v); }
+    });
+  }
+
+  function done(name, after, v) {
+    var card = document.createElement('div');
+    card.className = 'card ' + (v.ok === true ? 'ok' : v.ok === false ? 'bad' : '');
+    card.innerHTML = $('review').innerHTML;
+    $('results').insertBefore(card, $('results').firstChild);
+    while ($('results').children.length > 4) $('results').lastChild.remove();
+    $('review').innerHTML = '';
+    if (after != null) { values[name] = after; live[name] = true; }  // read-back beats the older snapshot
+    render();
+    pend(name, v.ok === true ? 'Applied, read back OK.' : v.ok === false ? 'Router reports no change.' : 'Sent.');
+    resetIdle();
+    card.setAttribute('tabindex', '-1'); card.focus();
+  }
+
+  function pend(name, text) { var p = $('pend-' + name); if (p) p.textContent = text; }
+  function resetIdle() { $('idle').hidden = !!$('review').innerHTML; }
+
+  $('col').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    var name;
+    try {
+      if ((name = b.dataset.toggle && b.dataset.name)) {
+        var next = edited(name); next[b.dataset.toggle] = !values[name][b.dataset.toggle];
+        b.setAttribute('aria-pressed', String(next[b.dataset.toggle]));
+        openReview(name, next);
+      } else if ((name = b.dataset.review)) {
+        openReview(name, edited(name));
+      } else if ((name = b.dataset.live)) {
+        b.disabled = true; b.textContent = 'Reading…';
+        LC.api('api/read/' + encodeURIComponent(name)).then(function (j) { values[name] = j.result; live[name] = true; render(); })
+          .catch(function (err) { b.disabled = false; b.textContent = 'Read it from the router'; LC.banner(name + ': ' + err.message); });
+      } else if ((name = b.dataset.remove)) {
+        var s = model.raw.settings[name], row = listRows(values[name])[Number(b.dataset.i)], id = row[s.id_field];
+        var params = {}; params[s.id_field] = id;
+        if ((UI[name] || {}).wrap) params = { client_list: [{ mac: id }] };
+        openListWrite(name, 'remove', params, 'Remove ' + (LC.text(row.service_name) || id), function (rows) {
+          var still = rows.some(function (r) { return String(r[s.id_field]) === String(id); });
+          return still ? { ok: false, text: 'The router said OK, but the entry is still listed.' } : { ok: true, text: 'The entry is gone from the router\'s list.' };
+        });
+      } else if ((name = b.dataset.addgo)) {
+        var st = model.raw.settings[name], ui = UI[name] || {}, p = {};
+        if (ui.add) {
+          ui.add.forEach(function (f) { p[f[0]] = (document.querySelector('[data-add="' + name + '"][data-field="' + f[0] + '"]').value || '').trim(); });
+          if (p.mac) p.mac = p.mac.toUpperCase().replace(/:/g, '-');
+          if (Object.keys(p).some(function (k) { return !p[k]; })) throw new Error('Fill in every field first.');
+        } else {
+          try { p = JSON.parse(document.querySelector('[data-addjson="' + name + '"]').value); } catch (err) { throw new Error('Not valid JSON: ' + err.message); }
+        }
+        var key = p.mac || p.external_port || '';
+        var sent = ui.wrap ? { client_list: [p] } : p;
+        openListWrite(name, 'add', sent, 'Add ' + key + ' to ' + (ui.title || st.label), function (rows) {
+          var there = rows.some(function (r) { return Object.keys(p).every(function (k) { return k === 'service_name' || String(r[k]) === String(p[k]); }); });
+          return there ? { ok: true, text: 'The router now lists the new entry.' } : { ok: false, text: 'The router said OK, but the new entry is not in its list.' };
+        });
+      }
+    } catch (err) { LC.banner(err.message); setTimeout(function () { LC.banner(''); }, 6000); }
+  });
+
+  LC.routerPage('settings', 'Settings', function (m) {
+    ingest(m);
+    if (!$('review').innerHTML) render();  // don't yank the form out from under an open review
+  });
+})();
+</script>
+</body>
+</html>

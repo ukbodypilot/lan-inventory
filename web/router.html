@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Router · LAN Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="nav.css">
+<link rel="stylesheet" href="console.css">
+<style>
+  .strip { display: flex; height: 18px; border-radius: 4px; overflow: hidden; background: var(--soft); }
+  .strip i { flex: 1 1 0; min-width: 0; }
+  .strip i.ok { background: var(--ok); opacity: .75; } .strip i.bad { background: var(--bad); } .strip i.part { background: var(--warn); }
+  .strip-l { display: flex; justify-content: space-between; font-size: 12px; color: var(--mut); margin-top: 4px; }
+  table.data td .spark { width: 140px; height: 24px; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div class="pagehead" id="pagehead"></div>
+  <div id="banner" role="alert"></div>
+  <section class="alerts" id="alerts" aria-label="Attention"></section>
+  <section class="tiles" id="tiles" aria-label="Status"></section>
+
+  <div class="row">
+    <section class="card grow" aria-labelledby="tp-h">
+      <div class="cardhead">
+        <h2 id="tp-h">Gateway throughput</h2>
+        <span class="legend"><i></i>Download</span>
+        <span class="legend"><i class="up"></i>Upload</span>
+        <div class="seg end" role="group" aria-label="Time range" id="range">
+          <button type="button" data-s="3600">1h</button>
+          <button type="button" data-s="86400" aria-pressed="true">24h</button>
+          <button type="button" data-s="604800">7d</button>
+          <button type="button" data-s="2592000">30d</button>
+        </div>
+      </div>
+      <svg class="chart" id="tpchart" role="img" aria-label="Gateway throughput over time"></svg>
+      <div class="empty" id="tpempty" hidden>No history in this range yet. The collector stores a point every 5 minutes (node speeds only on the hourly full read).</div>
+      <p class="note" id="tpnote"></p>
+    </section>
+    <section class="card" aria-labelledby="mesh-h">
+      <div class="cardhead"><h2 id="mesh-h">Mesh at a glance</h2><a class="end small" href="router-mesh.html">Open map</a></div>
+      <div class="meshlist" id="meshlist"></div>
+      <p class="note" id="meshnote"></p>
+    </section>
+  </div>
+
+  <div class="row">
+    <section class="card" aria-labelledby="conn-h"><h2 id="conn-h">How clients connect</h2><div id="conn"></div></section>
+    <section class="card" aria-labelledby="type-h"><h2 id="type-h">Online by type</h2><div class="bars" id="types" style="margin-top:12px"></div></section>
+    <section class="card" aria-labelledby="weak-h">
+      <div class="cardhead"><h2 id="weak-h">Weakest Wi-Fi signal</h2><a class="end small" href="router-clients.html?f=weak">All clients</a></div>
+      <div class="kv" id="weakest"></div>
+    </section>
+  </div>
+
+  <section class="card" aria-labelledby="day-h">
+    <div class="cardhead"><h2 id="day-h">Last 24 hours</h2><a class="end small" href="logs.html">Event log</a></div>
+    <h3 class="small mut" style="margin:4px 0 6px;font-weight:500">Control port 20001 (full reads and writes) <span id="tmpup"></span></h3>
+    <div class="strip" id="tmpstrip" role="img" aria-label="Control port availability over 24 hours"></div>
+    <div class="strip-l"><span>24 h ago</span><span>now</span></div>
+    <div class="tablebox" style="margin-top:16px"><table class="data">
+      <thead><tr><th scope="col">Node</th><th scope="col">Backhaul</th><th scope="col">Backhaul signal</th><th scope="col">Clients</th></tr></thead>
+      <tbody id="dayrows"></tbody>
+    </table></div>
+    <p class="note" id="daynote">Signal is the router's 0–3 level, sampled every 5 minutes. Clients are those online on each node.</p>
+  </section>
+</main>
+<script src="console.js"></script>
+<script>
+(function () {
+  'use strict';
+  var esc = LC.esc, $ = LC.$, model = null, range = 86400;
+  var TYPE = { iot_device: 'IoT', pc: 'PC', laptop: 'Laptop', tablet: 'Tablet', phone: 'Phone', tv: 'TV',
+               camera: 'Camera', game_console: 'Console', other: 'Other' };
+
+  function tile(k, v, s, extra, sCls) {
+    return '<div class="tile"><div class="k">' + esc(k) + '</div><div class="v">' + v + '</div>' + (extra || '') +
+      '<div class="s' + (sCls ? ' ' + sCls : '') + '">' + esc(s) + '</div></div>';
+  }
+  function meter(pct, warnAt) {
+    var cls = pct >= 90 ? 'bad' : pct >= warnAt ? 'warn' : '';
+    return '<div class="meter"><div class="' + cls + '" style="width:' + Math.min(100, pct) + '%"></div></div>';
+  }
+
+  function render(m) {
+    model = m;
+    LC.renderAlerts($('alerts'), LC.alerts(m), 'router-mesh.html');
+
+    var wan = (m.res('wan_lan_status') || {}).wan || {}, ipi = wan.ip_info || {};
+    var sys = (m.res('system_info') || {}).hardware_info || {};
+    var up = !!ipi.ip, dns = [ipi.dns1, ipi.dns2].filter(Boolean).join(', ');
+    var nodesOn = m.nodes.filter(function (n) { return n.online; }).length;
+    var off = m.nodes.length - nodesOn, weak = m.nodes.filter(function (n) { return n.weak; }).length;
+    var meshS = [off ? off + ' offline' : '', weak ? weak + ' weak link' + (weak > 1 ? 's' : '') : ''].filter(Boolean).join(' · ') || 'all healthy';
+    var r = m.resource || {}, memPct = r.memory_total ? Math.round(100 * r.memory_usage / r.memory_total) : null;
+    var dhcp = m.res('dhcp_server') || {}, leases = ((m.res('dhcp_leases') || {}).client_lease || []).length;
+    $('tiles').innerHTML =
+      tile('Internet', '<span class="dot ' + (up ? 'ok' : 'bad') + '"></span>' + (up ? 'Online' : 'Down'),
+        (wan.dial_type || '').replace(/_/g, ' ').replace(/^./, function (c) { return c.toUpperCase(); }) + (dns ? ' · DNS ' + dns : '')) +
+      tile('Clients', String(m.online.length), 'online · ' + m.clients.length + ' known') +
+      tile('Mesh nodes', nodesOn + ' <small>/ ' + m.nodes.length + '</small>', meshS, '', off || weak ? 'warn' : '') +
+      (r.cpu_usage != null ? tile('Gateway CPU', r.cpu_usage + '%', sys.cpu_core_count ? sys.cpu_core_count + ' cores' +
+        (sys.cpu_frequency ? ' · ' + (sys.cpu_frequency / 1000).toFixed(1) + ' GHz' : '') : 'gateway node', meter(r.cpu_usage, 70)) : '') +
+      (memPct != null ? tile('Gateway memory', memPct + '%', r.percent_only ? 'gateway node' : Math.round(r.memory_usage / 1024) + ' of ' +
+        Math.round(r.memory_total / 1024) + ' MB', meter(memPct, 75)) : '') +
+      (leases || dhcp.ip_amount_in_use ? tile('DHCP leases', String(leases || dhcp.ip_amount_in_use),
+        dhcp.start_ip ? 'pool ' + LC.shortIp(dhcp.start_ip) + ' – ' + LC.shortIp(dhcp.end_ip) : '') : '');
+
+    // mesh at a glance: bar = current download relative to the busiest node
+    var order = m.nodes.slice().sort(function (a, b) { return (b.master - a.master) || (b.online - a.online) || ((b.down || 0) - (a.down || 0)); });
+    var busiest = order.reduce(function (a, n) { return (n.down || 0) > (a ? a.down || 0 : 0) ? n : a; }, null);
+    var top = Math.max(1, busiest ? busiest.down || 0 : 1);
+    $('meshlist').innerHTML = order.map(function (n) {
+      var link = n.master ? 'gateway' : !n.online ? 'offline' : n.wired ? 'wired' :
+        'wireless · ' + n.bands.map(function (b, i) { return LC.bandLabel(b).replace(' GHz', 'G') + ' ' + n.levels[i] + '/3'; }).join(', ');
+      return '<div class="' + (n.online ? '' : 'off') + '"><div class="nm"><b>' + esc(n.name) + '</b><span class="mono mut">' +
+        esc(n.model + ' · ' + LC.shortIp(n.ip)) + '</span><span class="end' + (n.weak ? ' warn' : '') + '">' + esc(link) +
+        (n.online && n.down != null ? ' · ↓' + esc(LC.fmtRate(n.down)) : '') + '</span></div>' +
+        (n.online ? '<div class="track"><div class="' + (n.weak ? 'warn' : '') + '" style="width:' + (100 * (n.down || 0) / top).toFixed(1) + '%"></div></div>' : '') + '</div>';
+    }).join('');
+    $('meshnote').textContent = busiest ? 'Bars show each node\'s current download next to the busiest (' + busiest.name + ', ' +
+      LC.fmtRate(busiest.down) + '). Speeds assume the router reports kB/s.' : 'Node speeds are not in this snapshot.';
+
+    // connection breakdowns
+    var on = m.online, wl = on.filter(function (c) { return !c.wired; }).length, wd = on.length - wl;
+    var nets = {}; on.forEach(function (c) { nets[c.net || 'other'] = (nets[c.net || 'other'] || 0) + 1; });
+    var main = nets.main || 0, rest = on.length - main;
+    function split(a, b, la, lb) {
+      var t = Math.max(1, a + b);
+      return '<div class="split" aria-hidden="true"><div style="width:' + (100 * a / t) + '%"></div><div style="width:' + (100 * b / t) + '%"></div></div>' +
+        '<div class="split-l"><span><b>' + a + '</b> ' + la + '</span><span><b>' + b + '</b> ' + lb + '</span></div>';
+    }
+    var others = Object.keys(nets).filter(function (k) { return k !== 'main'; }).map(function (k) { return k === 'iot' ? 'IoT' : k; });
+    $('conn').innerHTML = split(wl, wd, 'wireless', 'wired') + split(main, rest, 'main network', others.length ? others.join(' + ') + ' network' : 'other networks');
+
+    var types = {}; on.forEach(function (c) { var t = TYPE[c.type] || c.type; types[t] = (types[t] || 0) + 1; });
+    var tk = Object.keys(types).sort(function (a, b) { return types[b] - types[a]; }), tmax = Math.max(1, types[tk[0]] || 1);
+    $('types').innerHTML = tk.map(function (t) {
+      return '<span>' + esc(t) + '</span><div class="b" style="width:' + (100 * types[t] / tmax) + '%"></div><span class="r mono">' + types[t] + '</span>';
+    }).join('');
+
+    var weakest = on.filter(function (c) { return c.signal != null; }).sort(function (a, b) { return a.signal - b.signal; }).slice(0, 5);
+    $('weakest').innerHTML = weakest.map(function (c) {
+      var col = c.signal <= -80 ? 'var(--bad)' : c.signal <= LC.WEAK_DBM ? 'var(--warn)' : 'var(--fg2)';
+      return '<a href="router-clients.html?mac=' + encodeURIComponent(c.mac) + '">' + esc(c.label) + '</a>' +
+        '<span class="r mono" style="color:' + col + '">' + c.signal + ' dBm</span>';
+    }).join('') || '<span class="mut">' + (m.partial ? 'Client signal is not in this partial snapshot.' : 'No wireless clients online.') + '</span>';
+
+    drawThroughput();
+    drawDay();
+  }
+
+  // control-port strip + per-node backhaul signal and client counts (router_history, 15-min buckets)
+  function drawDay() {
+    var since = 86400, pts = 96, bucket = since / pts, now = Date.now() / 1000, t0 = (Math.floor(now / bucket) - pts + 1) * bucket; // last slot = current bucket
+    function grid(points) {
+      var out = []; for (var i = 0; i < pts; i++) out.push(null);
+      (points || []).forEach(function (p) { var i = Math.floor((p[0] - t0) / bucket); if (i >= 0 && i < pts) out[i] = p[1]; });
+      return out;
+    }
+    Promise.all([LC.history('tmp_port_up', '', since, pts), LC.history('node_sig_5g', null, since, pts),
+                 LC.history('node_sig_24g', null, since, pts), LC.history('node_clients', null, since, pts)]).then(function (s) {
+      var up = grid(s[0]['']), seen = up.filter(function (v) { return v != null; });
+      $('tmpstrip').innerHTML = up.map(function (v) {
+        return '<i class="' + (v == null ? '' : v >= 0.999 ? 'ok' : v <= 0.001 ? 'bad' : 'part') + '"></i>';
+      }).join('');
+      $('tmpup').textContent = seen.length ? '· answering ' + Math.round(100 * seen.reduce(function (a, b) { return a + b; }, 0) / seen.length) + '% of checks' : '· no checks yet';
+      var nodes = model.nodes.filter(function (n) { return !n.master; }).sort(function (a, b) { return (a.wired - b.wired) || a.name.localeCompare(b.name); });
+      $('dayrows').innerHTML = nodes.map(function (n) {
+        var s5 = grid(s[1][n.mac]), s24 = grid(s[2][n.mac]), cl = grid(s[3][n.mac]);
+        var any = s5.concat(s24).some(function (v) { return v != null; });
+        var nowCl = cl.filter(function (v) { return v != null; }).slice(-1)[0];
+        return '<tr><td><b>' + esc(n.name) + '</b></td><td>' + (!n.online ? 'offline' : n.wired ? 'wired' : '<span' + (n.weak ? ' style="color:var(--warn)"' : '') + '>wireless</span>') +
+          '</td><td><div class="sparkcell">' + (any ? LC.spark(s5, { min: 0, max: 3, color: 'var(--acc)', w: 140 }) +
+          '<span>' + (n.wireless ? n.bands.map(function (b, i) { return LC.bandLabel(b).replace(' GHz', 'G') + ' ' + n.levels[i]; }).join(' ') : '') + '</span>'
+            : '<span class="mut">' + (n.wired ? '–' : 'no data yet') + '</span>') +
+          '</div></td><td><div class="sparkcell">' + LC.spark(cl, { min: 0, color: 'var(--fg2)', w: 140 }) +
+          '<span>' + (nowCl != null ? Math.round(nowCl) : '–') + '</span></div></td></tr>';
+      }).join('');
+    }).catch(function (e) { $('daynote').textContent = 'History unavailable: ' + e.message; });
+  }
+
+  function drawThroughput() {
+    if (!model || !model.master) return;
+    var mac = model.master.mac, pts = { 3600: 12, 86400: 144, 604800: 168, 2592000: 180 }[range];
+    Promise.all([LC.history('node_down', mac, range, pts), LC.history('node_up', mac, range, pts)]).then(function (s) {
+      var down = s[0][mac] || [], upl = s[1][mac] || [], now = Date.now() / 1000;
+      var bucket = Math.max(300, range / pts);
+      var ok = LC.chart($('tpchart'), [{ points: down, cls: 'down', fill: true }, { points: upl, cls: 'up' }],
+        { t0: now - range, t1: now, fmt: LC.fmtRate, gap: bucket * 2.5, minMax: 10 });
+      $('tpchart').style.display = ok ? '' : 'none';
+      $('tpempty').hidden = ok;
+      var cur = model.master;
+      $('tpnote').textContent = (cur.down != null ? 'Right now the gateway reports ↓' + LC.fmtRate(cur.down) + ' ↑' + LC.fmtRate(cur.up) + '. '
+        : 'No current speed in this snapshot. ') + 'Points are averaged per bucket; the unit (kB/s) is still to confirm against a speed test.';
+    }).catch(function (e) { $('tpnote').textContent = 'History unavailable: ' + e.message; });
+  }
+
+  $('range').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    range = Number(b.dataset.s);
+    Array.prototype.forEach.call(this.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+    drawThroughput();
+  });
+  var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(drawThroughput, 200); });
+
+  LC.routerPage('overview', 'Deco mesh', render);
+})();
+</script>
+</body>
+</html>

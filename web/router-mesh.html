@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mesh · LAN Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="nav.css">
+<link rel="stylesheet" href="console.css">
+<style>
+  .meshcard { padding: 20px; }
+  .legendbox { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 13px; color: var(--fg2); }
+  .legendbox span { display: inline-flex; align-items: center; gap: 8px; }
+  .legendbox svg line { stroke-width: 3; }
+  .tree { position: relative; padding: 8px 0 4px; overflow-x: auto; }
+  .tree svg.edges { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+  /* a tier never wraps: a wrapped card's connector would run through the row above and look like a child of it */
+  .tier { position: relative; display: flex; flex-wrap: nowrap; justify-content: center; gap: 16px; margin-bottom: 56px; min-width: min-content; }
+  .tier:last-child { margin-bottom: 0; }
+  .tier .ncard { flex: 0 1 176px; width: auto; min-width: 128px; }
+  .ncard { position: relative; display: block; width: 176px; padding: 12px; border-radius: 12px; background: var(--card);
+           border: 1px solid var(--line); color: var(--fg); text-decoration: none; font-size: 13px; line-height: 1.4; }
+  a.ncard:hover { border-color: var(--acc); color: var(--fg); }
+  .ncard b { display: block; font-size: 15px; }
+  .ncard .mono { font-size: 12px; color: var(--mut); }
+  .ncard .lk { margin-top: 4px; color: var(--mut); }
+  .ncard.weak { background: var(--warn-bg); border: 2px solid var(--warn); }
+  .ncard.weak b, .ncard.weak .lk { color: var(--warn-strong); } .ncard.weak .mono, .ncard.weak { color: var(--warn-text); }
+  .ncard.off { background: var(--off-bg); border: 1px dashed var(--off-line); color: var(--mut); }
+  .ncard.gw { background: var(--hero); color: var(--hero-fg); border-color: var(--hero); width: 240px; text-align: center; }
+  .tier .ncard.gw { flex: 0 0 240px; } .tier .ncard.inet { flex: 0 0 200px; }
+  .ncard.gw .mono, .ncard.gw .lk { color: var(--hero-mut); }
+  .ncard.inet { width: 200px; text-align: center; }
+  .edges .wired { stroke: var(--acc); stroke-width: 3; fill: none; }
+  .edges .wless { stroke: var(--acc); stroke-width: 3; stroke-dasharray: 6 6; fill: none; }
+  .edges .weak { stroke: var(--warn); stroke-width: 3; stroke-dasharray: 6 6; fill: none; }
+  .edges .off { stroke: var(--off-line); stroke-width: 2; stroke-dasharray: 3 6; fill: none; }
+  .edges .up { stroke: var(--fg); stroke-width: 2; fill: none; }
+  .narrow { display: none; list-style: none; margin: 0; padding: 0; }
+  .narrow li { margin: 0 0 10px calc(var(--d) * 18px); padding-left: 12px; border-left: 3px solid var(--acc); }
+  .narrow li.wless { border-left-style: dashed; } .narrow li.weak { border-left: 3px dashed var(--warn); }
+  .narrow li.off { border-left: 3px dotted var(--off-line); } .narrow li.root { border-left-color: transparent; padding-left: 0; }
+  .narrow .ncard, .narrow .ncard.gw, .narrow .ncard.inet { width: auto; text-align: left; }
+  @media (max-width: 760px) { .tree { display: none; } .narrow { display: block; } }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div class="pagehead" id="pagehead"></div>
+  <div id="banner" role="alert"></div>
+  <section class="alerts" id="alerts" aria-label="Attention"></section>
+
+  <section class="card meshcard" aria-labelledby="map-h">
+    <div class="cardhead">
+      <h2 id="map-h">Topology</h2><span class="mut small" id="summary"></span>
+      <div class="legendbox end" aria-label="Legend">
+        <span><svg width="28" height="6" aria-hidden="true"><line x1="1" y1="3" x2="27" y2="3" stroke="var(--acc)" stroke-linecap="round"/></svg>Wired backhaul</span>
+        <span><svg width="28" height="6" aria-hidden="true"><line x1="1" y1="3" x2="27" y2="3" stroke="var(--acc)" stroke-dasharray="6 6"/></svg>Wireless</span>
+        <span><svg width="28" height="6" aria-hidden="true"><line x1="1" y1="3" x2="27" y2="3" stroke="var(--warn)" stroke-dasharray="6 6"/></svg>Weak wireless</span>
+        <span><svg width="28" height="6" aria-hidden="true"><line x1="1" y1="3" x2="27" y2="3" stroke="var(--off-line)" stroke-dasharray="3 6"/></svg>Offline</span>
+      </div>
+    </div>
+    <div class="tree" id="tree"><svg class="edges" id="edges" aria-hidden="true"></svg></div>
+    <ul class="narrow" id="narrow" aria-label="Mesh nodes"></ul>
+    <p class="note">Throughput is each node's current rate from <span class="mono">device_list_speed</span>, assumed kB/s (unit still to confirm). Select a node to see its clients.</p>
+  </section>
+
+  <section class="card" style="margin-top:20px" aria-labelledby="tbl-h">
+    <div class="cardhead"><h2 id="tbl-h">Nodes</h2>
+      <div class="seg end" role="group" aria-label="Sparkline range" id="range">
+        <button type="button" data-s="86400" aria-pressed="true">24h</button><button type="button" data-s="604800">7d</button>
+      </div>
+    </div>
+    <div class="tablebox"><table class="data">
+      <thead><tr><th>Node</th><th class="hide-sm">Model</th><th class="hide-sm">Firmware</th><th>Backhaul</th>
+        <th class="num">Clients</th><th>Download</th><th class="hide-sm">Upload</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+  </section>
+</main>
+<script src="console.js"></script>
+<script>
+(function () {
+  'use strict';
+  var esc = LC.esc, $ = LC.$, model = null, range = 86400;
+
+  function linkText(n) {
+    if (n.master) return 'gateway';
+    if (!n.online) return 'offline';
+    if (n.wired) return 'wired';
+    return n.bands.map(function (b, i) { return LC.bandLabel(b) + ' ' + n.levels[i] + '/3'; }).join(' · ');
+  }
+  function edgeClass(n) { return !n.online ? 'off' : n.wired ? 'wired' : n.weak ? 'weak' : 'wless'; }
+
+  function card(n, busy) {
+    var cls = 'ncard' + (n.master ? ' gw' : !n.online ? ' off' : n.weak ? ' weak' : busy ? ' busy' : '');
+    var body = '<b>' + esc(n.name) + '</b><span class="mono">' + esc(n.model + ' v' + n.hw + ' · ' + (n.ip ? LC.shortIp(n.ip) : 'no IP')) + '</span>' +
+      '<div class="lk">' + esc(linkText(n)) + (n.master && model.resource ? ' · CPU ' + model.resource.cpu_usage + '%' : '') + '</div>' +
+      (n.online ? '<div>' + (n.clients == null ? 'clients: n/a' : n.clients + ' client' + (n.clients === 1 ? '' : 's')) + (busy ? ' <span class="badge acc">busiest</span>' : '') + '</div>' +
+        (n.down != null ? '<div class="mono">↓' + esc(LC.fmtRate(n.down)) + ' ↑' + esc(LC.fmtRate(n.up)) + '</div>' : '') : '');
+    return '<a class="' + cls + '" data-id="' + esc(n.id) + '" href="router-clients.html?node=' + encodeURIComponent(n.id) +
+      '" aria-label="' + esc(n.name + ', ' + linkText(n) + (n.online && n.clients != null ? ', ' + n.clients + ' clients, show them' : '')) + '">' + body + '</a>';
+  }
+
+  function render(m) {
+    model = m;
+    LC.renderAlerts($('alerts'), LC.alerts(m), null);
+    if (!m.nodes.length) {
+      // a snapshot with no node list (the router refused the collector): say so instead of drawing nothing
+      Array.prototype.slice.call($('tree').querySelectorAll('.tier, .empty')).forEach(function (t) { t.remove(); });
+      $('edges').innerHTML = ''; $('narrow').innerHTML = ''; $('rows').innerHTML = '';
+      $('summary').textContent = '';
+      $('tree').insertAdjacentHTML('beforeend', '<div class="empty">This snapshot has no mesh data: the router refused the collector. ' +
+        'The map comes back with the next good snapshot (every 5 min).</div>');
+      return;
+    }
+    Array.prototype.slice.call($('tree').querySelectorAll('.empty')).forEach(function (t) { t.remove(); });
+    var on = m.nodes.filter(function (n) { return n.online; }).length;
+    $('summary').textContent = m.nodes.length + ' Deco units · ' + on + ' online · ' + m.online.length + ' clients';
+
+    var busiest = m.nodes.filter(function (n) { return !n.master && n.online && n.down > 0; })
+      .sort(function (a, b) { return (b.down || 0) - (a.down || 0); })[0];
+    var kids = {}; m.nodes.forEach(function (n) { if (!n.master) (kids[n.parent || (m.master && m.master.id)] = kids[n.parent || (m.master && m.master.id)] || []).push(n); });
+    Object.keys(kids).forEach(function (k) { kids[k].sort(function (a, b) { return a.name.localeCompare(b.name); }); });
+
+    // wide view: tiers by depth, parents' children kept adjacent (DFS order within each tier)
+    var tiers = [], dfs = [];
+    (function walk(n, d) {
+      dfs.push({ n: n, d: d });
+      (tiers[d] = tiers[d] || []).push(n);
+      (kids[n.id] || []).forEach(function (c) { walk(c, d + 1); });
+    })(m.master || m.nodes[0], 1);
+    var inet = '<div class="ncard inet" data-id="__inet"><b>Internet</b><span class="small">' +
+      esc(((m.res('wan_lan_status') || {}).wan || {}).ip_info && m.res('wan_lan_status').wan.ip_info.ip ? 'online' : 'no WAN address') + '</span></div>';
+    var tree = $('tree');
+    Array.prototype.slice.call(tree.querySelectorAll('.tier')).forEach(function (t) { t.remove(); });
+    tree.insertAdjacentHTML('beforeend', '<div class="tier">' + inet + '</div>' + tiers.slice(1).map(function (t) {
+      return '<div class="tier">' + t.map(function (n) { return card(n, n === busiest); }).join('') + '</div>';
+    }).join(''));
+    // orphans (parent not in the list) still need showing
+    var shown = {}; dfs.forEach(function (x) { shown[x.n.id] = 1; });
+    var orphans = m.nodes.filter(function (n) { return !shown[n.id]; });
+    if (orphans.length) tree.insertAdjacentHTML('beforeend', '<div class="tier">' + orphans.map(function (n) { return card(n, false); }).join('') + '</div>');
+
+    $('narrow').innerHTML = '<li class="root" style="--d:0">' + inet + '</li>' + dfs.concat(orphans.map(function (n) { return { n: n, d: 1 }; })).map(function (x) {
+      return '<li class="' + (x.n.master ? 'root' : edgeClass(x.n)) + '" style="--d:' + (x.n.master ? 0 : x.d - 1) + '">' + card(x.n, x.n === busiest) + '</li>';
+    }).join('');
+
+    drawEdges();
+    renderTable(m, busiest);
+  }
+
+  function drawEdges() {
+    if (!model) return;
+    var tree = $('tree'), svg = $('edges'), box = tree.getBoundingClientRect();
+    if (!box.width) { svg.innerHTML = ''; return; }
+    function rect(id) {
+      var el = tree.querySelector('[data-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+      if (!el) return null;
+      var r = el.getBoundingClientRect();
+      return { cx: r.left - box.left + r.width / 2, top: r.top - box.top, bottom: r.bottom - box.top };
+    }
+    var out = '', inet = rect('__inet'), gw = model.master && rect(model.master.id);
+    if (inet && gw) out += '<path class="up" d="M' + inet.cx + ' ' + inet.bottom + ' V' + gw.top + '"/>';
+    model.nodes.forEach(function (n) {
+      if (n.master) return;
+      var c = rect(n.id), p = rect(n.parent || (model.master && model.master.id));
+      if (!c || !p) return;
+      var mid = c.top - 24;
+      out += '<path class="' + edgeClass(n) + '" d="M' + p.cx + ' ' + p.bottom + ' V' + mid + ' H' + c.cx + ' V' + c.top + '"/>';
+    });
+    svg.innerHTML = out;
+  }
+
+  function renderTable(m, busiest) {
+    var order = m.nodes.slice().sort(function (a, b) { return (b.master - a.master) || (b.online - a.online) || a.name.localeCompare(b.name); });
+    $('rows').innerHTML = order.map(function (n) {
+      return '<tr><td><a class="rowbtn" href="router-clients.html?node=' + encodeURIComponent(n.id) + '">' + esc(n.name) + '</a>' +
+        '<div class="sub mono">' + esc(n.ip || 'no IP') + (n.master ? ' · gateway' : '') + '</div>' +
+        (n.online && n.inetCheck && n.inetCheck !== 'online' ? '<div class="sub" title="The node\'s own internet check (inet_status). The node is in the mesh and serving clients; the Deco app shows it online.">internet check: ' + esc(n.inetCheck) + '</div>' : '') + '</td>' +
+        '<td class="hide-sm">' + esc(n.model + ' v' + n.hw) + '</td><td class="hide-sm mono">' + esc(n.fw) + '</td>' +
+        '<td>' + (n.weak ? '<span class="badge warn">' + esc(linkText(n)) + '</span>' : !n.online ? '<span class="badge">offline</span>' : esc(linkText(n))) + '</td>' +
+        '<td class="num">' + (n.online && n.clients != null ? n.clients : '–') + '</td>' +
+        '<td><div class="sparkcell" data-k="' + esc(n.mac) + '" data-m="node_down"><span>' + (n.online ? esc(LC.fmtRate(n.down)) : '–') + '</span></div></td>' +
+        '<td class="hide-sm"><div class="sparkcell" data-k="' + esc(n.mac) + '" data-m="node_up"><span>' + (n.online ? esc(LC.fmtRate(n.up)) : '–') + '</span></div></td></tr>';
+    }).join('');
+    drawSparks();
+  }
+
+  function drawSparks() {
+    var pts = range > 86400 ? 84 : 48;
+    ['node_down', 'node_up'].forEach(function (metric) {
+      LC.history(metric, null, range, pts).then(function (series) {
+        Array.prototype.forEach.call(document.querySelectorAll('.sparkcell[data-m="' + metric + '"]'), function (cell) {
+          var s = series[cell.dataset.k]; if (!s || !cell.dataset.k) return;
+          var old = cell.querySelector('svg'); if (old) old.remove();
+          cell.insertAdjacentHTML('afterbegin', LC.spark(s.map(function (p) { return p[1]; }),
+            { color: metric === 'node_down' ? 'var(--acc)' : 'var(--warn)', min: 0, minSpan: 10 }));
+        });
+      }).catch(function () {});
+    });
+  }
+
+  $('range').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    range = Number(b.dataset.s);
+    Array.prototype.forEach.call(this.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+    drawSparks();
+  });
+  var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(drawEdges, 100); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawEdges);
+
+  LC.routerPage('mesh', 'Mesh', render);
+})();
+</script>
+</body>
+</html>

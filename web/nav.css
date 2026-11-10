@@ -1,0 +1,29 @@
+/* Top bar shared by every page (Devices, Router, Ping). Self-contained tokens so the
+   Devices page can keep its own stylesheet and still pick this up. */
+.topbar {
+  --nv-bg: #ffffff; --nv-line: #dde2e8; --nv-fg: #15191e; --nv-mut: #5b6573;
+  --nv-acc: #1f5bd8; --nv-acc-soft: #e8effc;
+  background: var(--nv-bg); border-bottom: 1px solid var(--nv-line); color: var(--nv-fg);
+  font: 15px/1.45 "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  .topbar { --nv-bg: #1a1e24; --nv-line: #2b313a; --nv-fg: #e8ebef; --nv-mut: #a3adbd;
+            --nv-acc: #7aa2ff; --nv-acc-soft: #1f2b46; }
+}
+.topbar .tb-in { max-width: 1200px; margin: 0 auto; padding: 8px 16px; min-height: 60px; box-sizing: border-box;
+                 display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; }
+.topbar .tb-brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16px;
+                    color: inherit; text-decoration: none; }
+.topbar .tb-brand svg { stroke: var(--nv-acc); }
+.topbar nav { display: flex; flex-wrap: wrap; gap: 4px; }
+.topbar nav a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border-radius: 8px;
+                color: var(--nv-mut); text-decoration: none; font-size: 15px; }
+.topbar nav a:hover { color: var(--nv-fg); background: var(--nv-acc-soft); }
+.topbar nav a[aria-current=page] { color: var(--nv-fg); background: var(--nv-acc-soft); font-weight: 600; }
+.topbar nav a:focus-visible, .topbar button:focus-visible { outline: 2px solid var(--nv-acc); outline-offset: 2px; }
+.topbar .tb-side { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+                   font-size: 13px; color: var(--nv-mut); }
+.topbar .tb-side button { min-height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--nv-line);
+                          background: var(--nv-bg); color: var(--nv-fg); font: inherit; cursor: pointer; }
+.topbar .tb-side button:disabled { opacity: .6; cursor: progress; }
+@media (max-width: 640px) { .topbar .tb-side { margin-left: 0; width: 100%; } }

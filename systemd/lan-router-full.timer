@@ -1,0 +1,14 @@
+[Unit]
+Description=Full Deco router snapshot over TMP, hourly
+
+[Timer]
+# Hourly and paced (TMP_READ_GAP): on 2026-10-25 the TMP port closed for 45+ min and frequent or
+# back-to-back connections were suspected. The 5-minute snapshot (lan-router.timer) uses the web
+# interface; "Refresh now" still does a full read on demand.
+OnActiveSec=1h
+OnUnitActiveSec=1h
+AccuracySec=1min
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

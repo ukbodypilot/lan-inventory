@@ -1,0 +1,16 @@
+[Unit]
+Description=LAN listener (ARP/DHCP/SSDP/mDNS per MAC, periodic mDNS + SSDP queries)
+After=network-online.target
+
+[Service]
+User=@USER@
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+NoNewPrivileges=yes
+ExecStart=@DIR@/venv/bin/python @DIR@/passive.py
+Restart=always
+RestartSec=10
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

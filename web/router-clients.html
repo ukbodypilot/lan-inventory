@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clients · LAN Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="nav.css">
+<link rel="stylesheet" href="console.css">
+<style>
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-bottom: 16px; }
+  .toolbar input[type=search] { flex: 1 1 260px; min-height: 44px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .layout { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+  .layout > .card.list { flex: 999 1 640px; padding: 4px 8px 12px; }
+  .drawer { flex: 1 1 320px; position: sticky; top: 16px; }
+  .drawer:empty { display: none; }
+  .drawer .k { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--mut); font-weight: 600; margin: 16px 0 6px; }
+  .drawer h2 { margin: 2px 0 2px; font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
+  .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+  .facts div div:first-child { font-size: 12px; color: var(--mut); }
+  .facts div div:last-child { font-weight: 500; overflow-wrap: anywhere; }
+  .insight { margin-top: 14px; padding: 10px 12px; border-radius: 8px; font-size: 14px; background: var(--soft); color: var(--fg2); }
+  .insight.warn { background: var(--warn-bg); color: var(--warn-text); }
+  .actions { display: flex; flex-direction: column; gap: 8px; }
+  .actions .btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; }
+  th button { all: unset; cursor: pointer; } th button:focus-visible { outline: 2px solid var(--acc); }
+  th[aria-sort=ascending] button::after { content: " ↑"; } th[aria-sort=descending] button::after { content: " ↓"; }
+  .tag { font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--soft); color: var(--fg2); margin-left: 4px; white-space: nowrap; }
+  .tag.warn { background: var(--warn-bg); color: var(--warn-strong); }
+  .tag.acc { background: var(--acc-soft); color: var(--acc-strong); }
+  tr.offline td { color: var(--mut); }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div class="pagehead" id="pagehead"></div>
+  <div id="banner" role="alert"></div>
+  <div class="toolbar">
+    <label class="sr-only" for="q">Search clients</label>
+    <input type="search" id="q" placeholder="Search name, IP, MAC, node…">
+    <div class="chips" role="group" aria-label="Filters" id="chips"></div>
+  </div>
+  <div class="layout">
+    <section class="card list" aria-label="Client list">
+      <div class="tablebox"><table class="data">
+        <thead><tr>
+          <th data-k="name" aria-sort="ascending"><button type="button">Device</button></th>
+          <th data-k="node"><button type="button">Node</button></th>
+          <th data-k="link" class="hide-sm"><button type="button">Link</button></th>
+          <th data-k="signal"><button type="button">Signal · 24h</button></th>
+          <th data-k="traffic" class="hide-sm"><button type="button">Traffic · 24h</button></th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table></div>
+      <p class="note" id="count" style="padding:0 8px"></p>
+    </section>
+    <aside class="card drawer" id="drawer" aria-label="Selected client" aria-live="polite"></aside>
+  </div>
+</main>
+<dialog class="rvdlg" id="dlg"><div class="review" id="review"></div></dialog>
+<script src="console.js"></script>
+<script>
+(function () {
+  'use strict';
+  var esc = LC.esc, $ = LC.$;
+  var model = null, inv = {}, hist = {}, sel = LC.qs('mac'), filter = LC.qs('f') || 'all', nodeF = LC.qs('node'), q = '';
+  var sort = { k: 'name', dir: 1 };
+
+  var FILTERS = [
+    ['all', 'All', function (c) { return c.online; }],
+    ['wireless', 'Wireless', function (c) { return c.online && !c.wired; }],
+    ['wired', 'Wired', function (c) { return c.online && c.wired; }],
+    ['iot', 'IoT network', function (c) { return c.online && c.net === 'iot'; }],
+    ['weak', 'Weak signal', function (c) { return c.online && c.signal != null && c.signal <= LC.WEAK_DBM; }],
+    ['behind', 'Behind weak link', function (c) { return c.online && c.node && c.node.behindWeak; }],
+    ['offline', 'Offline', function (c) { return !c.online; }]
+  ];
+
+  function inventory() {
+    // LAN inventory's own identification, keyed by MAC, for the "LAN inventory says" line
+    return fetch('data.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : { devices: [] }; })
+      .then(function (d) { inv = {}; (d.devices || []).forEach(function (x) { if (x.mac) inv[x.mac.toLowerCase()] = x; }); })
+      .catch(function () {});
+  }
+
+  function loadHistory() {
+    return Promise.all(['client_signal', 'client_down', 'client_up'].map(function (mt) {
+      return LC.history(mt, null, 86400, 24).catch(function () { return {}; });
+    })).then(function (s) { hist = { signal: s[0], down: s[1], up: s[2] }; });
+  }
+
+  function sigColor(v) { return v == null ? 'var(--mut)' : v <= -80 ? 'var(--bad)' : v <= LC.WEAK_DBM ? 'var(--warn)' : v >= -55 ? 'var(--ok)' : 'var(--fg2)'; }
+  function traffic(c) {
+    var t = (c.down || 0) + (c.up || 0);
+    return !c.online ? '–' : t < 1 ? 'idle' : (c.down >= 1 ? '↓' + LC.fmtInt(c.down) : '') + (c.up >= 1 ? ' ↑' + LC.fmtInt(c.up) : '');
+  }
+  var KEYS = {
+    name: function (c) { return c.label.toLowerCase(); },
+    node: function (c) { return c.node ? c.node.name.toLowerCase() : '~'; },
+    link: function (c) { return c.wired ? 'wired' : c.band || '~'; },
+    signal: function (c) { return c.signal == null ? 999 : c.signal; },
+    traffic: function (c) { return -((c.down || 0) + (c.up || 0)); }
+  };
+
+  function visible() {
+    var f = FILTERS.filter(function (x) { return x[0] === filter; })[0] || FILTERS[0];
+    var ql = q.toLowerCase();
+    return model.clients.filter(function (c) {
+      if (!f[2](c)) return false;
+      if (nodeF && (!c.node || c.node.id !== nodeF)) return false;
+      if (!ql) return true;
+      return [c.label, c.ip, c.mac, c.macDash, c.node && c.node.name, c.node && c.node.ip, c.type, c.net].join(' ').toLowerCase().indexOf(ql) >= 0;
+    }).sort(function (a, b) {
+      var x = KEYS[sort.k](a), y = KEYS[sort.k](b);
+      return (x < y ? -1 : x > y ? 1 : 0) * sort.dir || a.label.localeCompare(b.label);
+    });
+  }
+
+  function renderChips() {
+    var html = FILTERS.map(function (f) {
+      var n = model.clients.filter(function (c) { return f[2](c) && (!nodeF || (c.node && c.node.id === nodeF)); }).length;
+      return '<button type="button" class="chip" data-f="' + f[0] + '" aria-pressed="' + (filter === f[0]) + '">' + f[1] + ' ' + n + '</button>';
+    }).join('');
+    var nd = nodeF && model.nodeById[nodeF];
+    if (nd) html += '<button type="button" class="chip" data-clear="node" aria-pressed="true" aria-label="Remove node filter ' + esc(nd.name) + '">Node: ' + esc(nd.name) + ' ✕</button>';
+    $('chips').innerHTML = html;
+  }
+
+  function renderRows() {
+    var list = visible(), topUp = model.online.reduce(function (a, c) { return (c.up || 0) > (a ? a.up || 0 : 0) ? c : a; }, null);
+    var here = location.hostname;
+    $('rows').innerHTML = list.map(function (c) {
+      var s = (hist.signal || {})[c.mac], d = (hist.down || {})[c.mac], u = (hist.up || {})[c.mac];
+      var tags = (c.ip && c.ip === here ? '<span class="tag acc">this server</span>' : '') +
+        (topUp && c === topUp && c.up >= 50 ? '<span class="tag">top uploader</span>' : '') +
+        (c.reservedIp ? '<span class="tag">reserved</span>' : '') + (c.blocked ? '<span class="tag warn">blocked</span>' : '');
+      var trafSeries = d ? d.map(function (p, i) { return p[1] + ((u || [])[i] ? u[i][1] : 0); }) : [];
+      return '<tr class="' + (c.mac === sel ? 'sel' : '') + (c.online ? '' : ' offline') + '">' +
+        '<td><button type="button" class="rowbtn" data-mac="' + esc(c.mac) + '">' + esc(c.label) + '</button>' +
+        '<div class="sub">' + esc((c.ip ? LC.shortIp(c.ip) : 'no IP') + ' · ' + (c.net === 'iot' ? 'IoT network' : c.net || '?')) + tags + '</div></td>' +
+        '<td>' + (c.node ? esc(c.node.name) + (c.node.behindWeak ? ' <span class="tag warn">weak link</span>' : '') : '<span class="mut">–</span>') + '</td>' +
+        '<td class="hide-sm">' + (c.wired ? 'wired' : c.band ? esc(LC.bandLabel(c.band)) : '–') + '</td>' +
+        '<td>' + (c.signal != null || s ? '<div class="sparkcell">' + (s ? LC.spark(s.map(function (p) { return p[1]; }), { color: sigColor(c.signal), min: -90, max: -30 }) : '') +
+          '<span style="color:' + sigColor(c.signal) + '">' + (c.signal != null ? c.signal : '–') + '</span></div>' : '<span class="mut">–</span>') + '</td>' +
+        '<td class="hide-sm"><div class="sparkcell">' + (trafSeries.length ? LC.spark(trafSeries, { color: 'var(--acc)', min: 0, minSpan: 5 }) : '') +
+          '<span>' + esc(traffic(c)) + '</span></div></td></tr>';
+    }).join('') || '<tr><td colspan="5" class="mut">No clients match.</td></tr>';
+    $('count').textContent = 'Showing ' + list.length + (filter === 'offline' ? ' offline' : ' of ' + model.online.length + ' online') +
+      ' (' + model.clients.length + ' known). Signal in dBm, traffic in ' + LC.UNIT + ' (assumed unit). Sparklines: last 24 h.' +
+      (model.partial ? ' Signal comes from the hourly full read (or Refresh now); the 5-minute snapshots use the web interface, which does not report it.' : '');
+    Array.prototype.forEach.call(document.querySelectorAll('th[data-k]'), function (th) {
+      th.setAttribute('aria-sort', th.dataset.k === sort.k ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none');
+    });
+  }
+
+  function settingTier(name, op) {
+    var s = (model.raw.settings || {})[name] || {};
+    var v = s[op + '_verified'];
+    return { tier: v ? 'verified' : s.tier || 'inferred', risk: s.risk || 'medium', write: s[op] || '' };
+  }
+
+  function renderDrawer() {
+    var c = sel && model.clients.filter(function (x) { return x.mac === sel; })[0];
+    if (!c) { $('drawer').innerHTML = ''; return; }
+    var i = inv[c.mac], n = c.node;
+    var insight = !c.online ? 'Not connected right now.' :
+      n && n.behindWeak ? (c.signal != null && c.signal > LC.WEAK_DBM ? 'Good signal to its node, but ' : 'Its node ') +
+        'sits behind ' + n.behindWeak.name + '\'s weak wireless backhaul, so that link is the real bottleneck.' :
+      c.signal != null && c.signal <= LC.WEAK_DBM ? 'Weak signal to ' + (n ? n.name : 'its node') + '. Moving it, or a node closer to it, would help.' :
+      c.wired ? 'Wired to ' + (n ? n.name : 'the mesh') + '.' : 'Healthy connection.';
+    var res = settingTier('reservations', c.reservedIp ? 'remove' : 'add');
+    var blk = settingTier('access_control_white_list', c.blocked ? 'remove' : 'add');
+    $('drawer').innerHTML = '<div class="k" style="margin-top:0">Selected</div><h2>' + esc(c.label) + '</h2>' +
+      '<div class="mono mut">' + esc((c.ip || 'no IP') + ' · ' + c.macDash) + '</div>' +
+      '<div class="facts">' +
+        '<div><div>Signal</div><div style="color:' + sigColor(c.signal) + '">' + (c.signal != null ? c.signal + ' dBm' : c.wired ? 'wired' : '–') + '</div></div>' +
+        '<div><div>Connected</div><div>' + (c.online ? esc(LC.fmtDur(c.onlineTime)) : 'offline') + '</div></div>' +
+        '<div><div>Band</div><div>' + (c.wired ? 'wired' : c.band ? esc(LC.bandLabel(c.band)) : '–') + '</div></div>' +
+        '<div><div>Via node</div><div>' + (n ? esc(n.name + ' ' + LC.shortIp(n.ip)) : '–') + '</div></div>' +
+        '<div><div>Network</div><div>' + esc(c.net === 'iot' ? 'IoT' : c.net || '–') + '</div></div>' +
+        '<div><div>Traffic now</div><div class="mono">' + esc(traffic(c)) + '</div></div>' +
+      '</div>' +
+      '<div class="insight' + (n && n.behindWeak || (c.signal != null && c.signal <= LC.WEAK_DBM) ? ' warn' : '') + '">' + esc(insight) + '</div>' +
+      '<div class="k">LAN inventory says</div>' +
+      (i ? '<div>' + esc([i.type, i.model || i.vendor, i.name && i.name !== c.label ? '“' + i.name + '”' : ''].filter(Boolean).join(' · ') || 'Unidentified') +
+        (i.curated ? ' <span class="badge ok">curated</span>' : '') + '</div>' : '<div class="mut">Not in the inventory (yet).</div>') +
+      '<a href="index.html?q=' + encodeURIComponent(c.ip || c.mac) + '">Open in Devices</a>' +
+      '<div class="k">Actions</div><div class="actions">' +
+        (c.reservedIp || c.ip ? '<button type="button" class="btn" data-act="reserve">' + (c.reservedIp ? 'Remove IP reservation (' + esc(c.reservedIp) + ')' : 'Reserve this IP') + ' ' + LC.tierBadge(res.tier) + '</button>' : '') +
+        '<button type="button" class="btn' + (c.blocked ? '' : ' danger') + '" data-act="block">' + (c.blocked ? 'Unblock' : 'Block internet access') + ' ' + LC.tierBadge(blk.tier) + '</button>' +
+        '<button type="button" class="btn" disabled title="No speed-limit write opcode is known yet">Limit speed <span class="badge">not available</span></button>' +
+      '</div><p class="note">Anything not verified opens a confirm step, then shows what the router reports afterwards.</p>';
+  }
+
+  function act(kind) {
+    var c = model.clients.filter(function (x) { return x.mac === sel; })[0]; if (!c) return;
+    var o;
+    if (kind === 'reserve') {
+      var t = settingTier('reservations', c.reservedIp ? 'remove' : 'add');
+      o = c.reservedIp ? {
+        title: 'Remove reservation for ' + c.label, params: { mac: c.macDash },
+        diff: [['reservation', c.reservedIp, '(none)']],
+        verify: function (after) {
+          var still = ((after || {}).reservation_list || []).some(function (r) { return LC.macColon(r.mac) === c.mac; });
+          return still ? { ok: false, text: 'The router said OK, but the reservation is still listed.' } : { ok: true, text: 'The reservation list no longer contains this MAC.' };
+        }
+      } : {
+        title: 'Reserve ' + c.ip + ' for ' + c.label, params: { mac: c.macDash, ip: c.ip },
+        diff: [['reservation', '(none)', c.ip]],
+        verify: function (after) {
+          var row = ((after || {}).reservation_list || []).filter(function (r) { return LC.macColon(r.mac) === c.mac; })[0];
+          return row ? { ok: row.ip === c.ip, text: 'Router now lists ' + c.macDash + ' → ' + row.ip + '.' } : { ok: false, text: 'The router said OK, but the reservation list does not contain this MAC.' };
+        }
+      };
+      Object.assign(o, t);
+    } else {
+      var b = settingTier('access_control_white_list', c.blocked ? 'remove' : 'add');
+      o = Object.assign({
+        title: (c.blocked ? 'Unblock ' : 'Block internet for ') + c.label,
+        params: { client_list: [{ mac: c.macDash }] },
+        diff: [['access list', c.blocked ? 'listed' : 'not listed', c.blocked ? 'removed' : 'added']],
+        verify: function (after) {
+          var listed = ((after || {}).client_list || []).some(function (r) { return LC.macColon(r.mac) === c.mac; });
+          var ok = c.blocked ? !listed : listed;
+          return { ok: ok, text: ok ? 'The access-control list now ' + (listed ? 'contains' : 'no longer contains') + ' this MAC (mode: ' +
+            (((model.res('access_control_mode') || {}).access_control_mode) || '?') + ').' : 'The router said OK, but its access-control list is unchanged.' };
+        }
+      }, b);
+    }
+    o.box = $('review');
+    o.onCancel = function () { $('dlg').close(); };
+    o.onDone = function () {
+      // the drawer catches up when the router is back and router_busy has re-snapshotted (lc:router-ready)
+      var close = document.createElement('div'); close.className = 'rv-btns';
+      close.innerHTML = '<button type="button" class="btn">Close</button>';
+      close.firstChild.addEventListener('click', function () { $('dlg').close(); });
+      $('review').appendChild(close); close.firstChild.focus();
+    };
+    $('dlg').showModal();
+    LC.review(o);
+  }
+
+  function render() { renderChips(); renderRows(); renderDrawer(); }
+
+  $('q').addEventListener('input', function () { q = this.value; renderRows(); });
+  $('chips').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.clear) { nodeF = null; history.replaceState(null, '', location.pathname); }
+    else filter = b.dataset.f;
+    renderChips(); renderRows();
+  });
+  document.querySelector('thead').addEventListener('click', function (e) {
+    var th = e.target.closest('th[data-k]'); if (!th) return;
+    sort = { k: th.dataset.k, dir: sort.k === th.dataset.k ? -sort.dir : 1 };
+    renderRows();
+  });
+  $('rows').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-mac]'); if (!b) return;
+    sel = b.dataset.mac; renderRows(); renderDrawer();
+    if (window.innerWidth < 980) $('drawer').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  $('drawer').addEventListener('click', function (e) { var b = e.target.closest('button[data-act]'); if (b) act(b.dataset.act); });
+  $('dlg').addEventListener('close', function () { $('review').innerHTML = ''; });
+
+  Promise.all([inventory(), loadHistory()]).then(function () {
+    LC.routerPage('clients', 'Clients', function (m) {
+      model = m;
+      if (sel && !m.clients.some(function (c) { return c.mac === sel; })) sel = null;
+      if (sel && filter !== 'offline' && !m.clients.filter(function (c) { return c.mac === sel; })[0].online) filter = 'offline';
+      render();
+    });
+  });
+})();
+</script>
+</body>
+</html>

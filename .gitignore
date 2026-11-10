@@ -1,0 +1,17 @@
+# private to your network - never commit
+venv/
+scans/
+state/
+web/data.json
+web/data.json.tmp
+findings.json
+# downloadable reference data (see fetch_data.sh)
+data/
+__pycache__/
+*.pyc
+alerts.env
+router.env
+web/router.json
+.mcp.json
+# event logs (lan_log.py); a tmpfs on the reference box
+logs/

@@ -1,0 +1,9 @@
+[Unit]
+Description=Deco router full snapshot over TMP (port 20001), reads paced TMP_READ_GAP s apart
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=@USER@
+TimeoutStartSec=5min
+ExecStart=@DIR@/venv/bin/python3 @DIR@/router_collect.py

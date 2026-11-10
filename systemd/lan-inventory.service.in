@@ -1,0 +1,14 @@
+[Unit]
+Description=LAN inventory + router page (Basic Auth)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=@USER@
+Environment=LAN_BIND=@BIND@
+Environment=LAN_PORT=@PORT@
+ExecStart=@DIR@/venv/bin/python3 @DIR@/router_web.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

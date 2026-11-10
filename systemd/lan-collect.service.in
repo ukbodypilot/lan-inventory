@@ -1,0 +1,14 @@
+[Unit]
+Description=LAN daily fingerprinting sweep (nmap OS/services, mDNS, SSDP, vendor probes, Kasa, Tuya)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=@USER@
+AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
+NoNewPrivileges=yes
+Nice=10
+TimeoutStartSec=3h
+WorkingDirectory=@DIR@
+ExecStart=@DIR@/venv/bin/python @DIR@/collect.py

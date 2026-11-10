@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logs · LAN Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="nav.css">
+<link rel="stylesheet" href="console.css">
+<style>
+  .toolbar[hidden], .tablebox[hidden], pre.journal[hidden] { display: none; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 12px; }
+  .toolbar .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .toolbar input[type=search] { flex: 1 1 220px; min-width: 0; }
+  table.data td.when { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  table.data td.what { width: 100%; }
+  table.data td.what details summary { cursor: pointer; list-style: none; }
+  table.data td.what details summary::-webkit-details-marker { display: none; }
+  table.data td.what pre { margin: 8px 0 0; padding: 8px 10px; background: var(--soft); border-radius: 6px;
+                           font: 12px/1.45 "IBM Plex Mono", ui-monospace, monospace; white-space: pre-wrap; word-break: break-all; }
+  tr.bad td.what summary { color: var(--bad); }
+  tr.ok td.what summary { color: var(--ok); }
+  .day td { background: var(--soft); font-size: 13px; font-weight: 600; color: var(--fg2); }
+  pre.journal { margin: 0; padding: 12px; background: var(--soft); border-radius: 8px; max-height: 70vh; overflow: auto;
+                font: 12px/1.5 "IBM Plex Mono", ui-monospace, monospace; white-space: pre-wrap; word-break: break-word; }
+  .foot { margin-top: 12px; font-size: 13px; color: var(--mut); }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div class="pagehead"><h1>Logs</h1></div>
+  <div id="banner" role="alert"></div>
+  <section class="card" aria-labelledby="log-h">
+    <h2 id="log-h" class="sr-only">Events</h2>
+    <div class="toolbar">
+      <div class="chips" role="group" aria-label="Stream" id="streams"></div>
+    </div>
+    <div class="toolbar" id="evtools">
+      <div class="seg" role="group" aria-label="Time range" id="range">
+        <button type="button" data-s="3600">1h</button>
+        <button type="button" data-s="86400" aria-pressed="true">24h</button>
+        <button type="button" data-s="604800">7d</button>
+        <button type="button" data-s="2592000">30d</button>
+      </div>
+      <input type="search" id="q" placeholder="Filter: name, MAC, IP, write, error…" aria-label="Filter events">
+    </div>
+    <div class="toolbar" id="jtools" hidden>
+      <label class="field">Service <select id="unit">
+        <option value="">All four</option><option value="lan-inventory">Website (lan-inventory)</option>
+        <option value="lan-router">5-min web snapshot (lan-router)</option><option value="lan-router-full">Hourly full read (lan-router-full)</option>
+        <option value="lan-ping">Ping (lan-ping)</option></select></label>
+      <label class="check"><input type="checkbox" id="noise"> Include page requests</label>
+    </div>
+    <div class="tablebox" id="evbox"><table class="data">
+      <thead><tr><th scope="col">Time</th><th scope="col">Stream</th><th scope="col">What happened</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+    <div class="empty" id="empty" hidden>Nothing logged in this range.</div>
+    <pre class="journal" id="journal" hidden></pre>
+    <p class="foot" id="foot"></p>
+  </section>
+</main>
+<script src="console.js"></script>
+<script>
+(function () {
+  'use strict';
+  var esc = LC.esc, $ = LC.$;
+  LC.simpleTopbar('logs');
+
+  var STREAMS = [['', 'All'], ['collect', 'Snapshots'], ['writes', 'Writes'], ['mesh', 'Mesh'], ['clients', 'Clients'], ['devices', 'Devices'],
+                 ['tmp', 'Control port'], ['busy', 'Lockouts'], ['ping', 'Ping'], ['web', 'Logins'], ['journal', 'Service journal']];
+  var LABEL = {}; STREAMS.forEach(function (s) { LABEL[s[0]] = s[1]; });
+  var stream = LC.qs('stream') || '', range = 86400, timer = null;
+  if (LC.qs('q')) $('q').value = LC.qs('q');
+
+  function dur(s) { return s == null ? '?' : s < 90 ? Math.round(s) + ' s' : LC.fmtDur(s); }
+  function sig(o) {
+    return o ? Object.keys(o).map(function (b) { return LC.bandLabel(b) + ' ' + o[b] + '/3'; }).join(', ') : '?';
+  }
+  function band(b) { return b === 'wired' ? 'wired' : b ? LC.bandLabel(b) : ''; }
+  function who(r) { return '<b>' + esc(r.client || r.node || r.mac) + '</b>'; }
+
+  // [css class, html] for one event
+  function say(r) {
+    var e = r.ev;
+    switch (r.stream) {
+      case 'collect':
+        if (e === 'failed') return ['bad', 'Snapshot failed: ' + esc(r.web_error || r.tmp_error || 'nothing read') + (r.kept_previous ? ' (kept the previous snapshot)' : '')];
+        var bad = r.reads_failed ? Object.keys(r.reads_failed) : [];
+        return [bad.length || r.tmp_error ? 'bad' : '',
+          (r.mode === 'full' ? (r.source === 'tmp' ? 'Full read' : 'Full read <b>refused</b>, used the web interface') : 'Web snapshot') +
+          ' (' + esc(r.trigger) + '): ' + r.reads_ok + ' reads OK' + (bad.length ? ', <b>' + bad.length + ' failed</b> (' + esc(bad.join(', ')) + ')' : '') +
+          ', ' + r.nodes_online + '/' + r.nodes + ' nodes, ' + r.clients_online + ' clients, ' + r.seconds + ' s' +
+          (r.connect_s != null ? ' (connect ' + r.connect_s + ' s)' : '') +
+          (r.slowest && r.slowest[0] && r.slowest[0][1] > 1500 ? '; slowest ' + esc(r.slowest[0][0]) + ' ' + (r.slowest[0][1] / 1000).toFixed(1) + ' s' : '') +
+          (r.speed && r.speed !== 'ok' ? '. Node speeds: ' + esc(r.speed) : '') +
+          (r.tmp_error ? '. TMP: ' + esc(r.tmp_error) : '') + (r.skipped_tmp ? '. ' + esc(r.skipped_tmp) : '')];
+      case 'writes':
+        return [e === 'write' ? 'ok' : 'bad', '<b class="mono">' + esc(r.name) + '</b> via ' + esc(r.via) + (r.user ? ' by ' + esc(r.user) : '') +
+          (e === 'write' ? ': accepted' + (r.read_back ? ', read back ' + esc(r.read_back) : '') : ': ' + esc(r.error))];
+      case 'busy':
+        if (e === 'lock') return ['', 'Locked router controls after <b class="mono">' + esc(r.write) + '</b>'];
+        return [r.outcome === 'timeout' ? 'bad' : '', 'Unlocked after <b class="mono">' + esc(r.write) + '</b>: ' +
+          (r.outcome === 'back' ? 'port 20001 closed ' + r.down_at + ' s after the write, back after ' + dur(r.closed_s)
+            : r.outcome === 'never_closed' ? 'port never closed' : 'gave up after ' + dur(r.seconds) + ' (port still shut?)')];
+      case 'tmp':
+        if (e === 'speed_backoff') return ['bad', 'Node-speed read refused; none for ' + dur(r.for_s) + ' (' + esc(r.error) + ')'];
+        return e === 'port_down' ? ['bad', 'Control port 20001 <b>stopped answering</b> (' + esc(r.how) + '; had been up ' + dur(r.up_for_s) + ')']
+          : ['ok', 'Control port 20001 <b>answering again</b> (' + esc(r.how) + '; was down ~' + dur(r.down_for_s) + ')'];
+      case 'mesh':
+        var n = who(r);
+        if (e === 'node_offline') return ['bad', n + ' left the mesh'];
+        if (e === 'node_online') return ['ok', n + ' rejoined the mesh' + (r.ip ? ' (' + esc(r.ip) + ')' : '')];
+        if (e === 'node_renamed') return ['', esc(r.was) + ' renamed to ' + n];
+        if (e === 'node_ip') return ['', n + ' IP ' + esc(r.was) + ' → ' + esc(r.now)];
+        if (e === 'node_upstream') return ['', n + ' now connects through <b>' + esc(r.now) + '</b> (was ' + esc(r.was) + ')'];
+        if (e === 'node_backhaul') return [r.now === 'wireless' ? 'bad' : 'ok', n + ' backhaul ' + esc(r.was) + ' → <b>' + esc(r.now) + '</b>' + (r.now === 'wireless' ? ' (' + esc(sig(r.signal)) + ')' : '')];
+        if (e === 'node_signal') return ['', n + ' backhaul signal ' + esc(sig(r.was)) + ' → <b>' + esc(sig(r.now)) + '</b>'];
+        if (e === 'node_firmware') return ['', n + ' firmware ' + esc(r.was) + ' → ' + esc(r.now)];
+        if (e === 'node_added') return ['', 'New node ' + n + ' (' + esc(r.model) + ')'];
+        if (e === 'node_removed') return ['bad', n + ' removed from the node list'];
+        break;
+      case 'clients':
+        var c = '<a href="router-clients.html?mac=' + encodeURIComponent(r.mac) + '">' + esc(r.client) + '</a>';
+        var s = r.signal ? ', ' + r.signal + ' dBm' : '';
+        if (e === 'joined') return ['', c + ' came online on ' + esc(r.node || '?') + (r.band ? ' (' + esc(band(r.band)) + s + ')' : '')];
+        if (e === 'left') return ['', c + ' went offline' + (r.node ? ' (was on ' + esc(r.node) + ')' : '')];
+        if (e === 'roamed') return ['', c + ' moved ' + esc(r.was) + ' → <b>' + esc(r.now) + '</b>' + (r.band ? ' (' + esc(band(r.band)) + s + ')' : '')];
+        if (e === 'band') return ['', c + ' switched ' + esc(band(r.was)) + ' → ' + esc(band(r.now)) + ' on ' + esc(r.node || '?')];
+        if (e === 'ip') return ['', c + ' IP ' + esc(r.was) + ' → ' + esc(r.now)];
+        break;
+      case 'devices':
+        var dv = '<a href="index.html?q=' + encodeURIComponent(r.mac || '') + '">' + esc(r.mac || '') + '</a>' + (r.ip ? ' (' + esc(r.ip) + ')' : '');
+        if (e === 'joined') return ['ok', 'First sighting of ' + dv + (r.vendor ? ', ' + esc(r.vendor) : '')];
+        if (e === 'ip_changed') return ['', dv + ' address ' + esc(r.was) + ' → <b>' + esc(r.ip) + '</b>'];
+        if (e === 'online') return ['', dv + ' came online'];
+        if (e === 'offline') return ['', dv + ' went offline'];
+        if (e === 'baseline') return ['', 'Presence history started with ' + (r.online || []).length + ' devices online'];
+        break;
+      case 'ping':
+        if (e === 'outage_start') return ['bad', 'No replies from <b>' + esc(r.target) + '</b>' + (r.last_reply_hop ? '; last hop still answering: ' + r.last_reply_hop + ' (' + esc(r.last_reply_ip) + ')' : '; nothing answered')];
+        if (e === 'outage_end') return ['ok', 'Replies from ' + esc(r.target) + ' back after ' + dur(r.for_s) + ' (' + r.lost_rounds + ' rounds lost)'];
+        if (e === 'route_change') return ['', 'Route to ' + esc(r.target) + ' changed (' + r.hops + ' hops)'];
+        if (e === 'mtr_failed') return ['bad', 'mtr failing: ' + esc(r.error)];
+        if (e === 'mtr_recovered') return ['ok', 'mtr working again after ' + dur(r.for_s) + ' (' + r.failed_rounds + ' failed rounds)'];
+        if (e === 'target') return ['', 'Tracing ' + esc(r.target) + ' every ' + r.interval + ' s'];
+        break;
+      case 'web':
+        return ['bad', 'Failed login to this site as <b>' + esc(r.user) + '</b> from ' + esc(r.remote)];
+    }
+    return ['', esc(e)];
+  }
+
+  function details(r) {
+    var o = {}; Object.keys(r).forEach(function (k) { if (['t', 'ts', 'stream'].indexOf(k) < 0 && r[k] != null) o[k] = r[k]; });
+    if (typeof o.after === 'string') { try { o.after = JSON.parse(o.after); } catch (e) { /* cut */ } }
+    return JSON.stringify(o, null, 1);
+  }
+
+  function render(j) {
+    var last = '', html = '';
+    j.events.forEach(function (r) {
+      var d = new Date(r.t * 1000), day = d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+      if (day !== last) { html += '<tr class="day"><td colspan="3">' + esc(day) + '</td></tr>'; last = day; }
+      var s = say(r);
+      html += '<tr class="' + s[0] + '"><td class="when mono">' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) +
+        '</td><td class="mut small">' + esc(LABEL[r.stream] || r.stream) + '</td><td class="what"><details><summary>' + s[1] +
+        '</summary><pre>' + esc(details(r)) + '</pre></details></td></tr>';
+    });
+    $('rows').innerHTML = html;
+    $('empty').hidden = !!j.events.length;
+    var st = j.stats || {}, tot = 0, oldest = null;
+    Object.keys(st.streams || {}).forEach(function (k) { var x = st.streams[k]; tot += x.bytes; if (!oldest || x.oldest < oldest) oldest = x.oldest; });
+    $('foot').textContent = j.events.length + ' event' + (j.events.length === 1 ? '' : 's') + (j.events.length >= 1000 ? ' (newest 1000)' : '') +
+      ' · ' + (tot / 1024).toFixed(0) + ' KB in ' + (st.dir || 'logs/') + ', kept ' + (st.keep_days || 30) + ' days' +
+      (oldest ? ', oldest ' + oldest : '') + '. Click a line for its full record.';
+  }
+
+  function load() {
+    clearTimeout(timer);
+    var isJ = stream === 'journal';
+    $('evtools').hidden = isJ; $('jtools').hidden = !isJ;
+    $('evbox').hidden = isJ; $('journal').hidden = !isJ;
+    var p;
+    if (isJ) {
+      $('empty').hidden = true;
+      p = LC.api('api/journal?lines=500&unit=' + encodeURIComponent($('unit').value) + '&noise=' + ($('noise').checked ? 1 : 0)).then(function (j) {
+        if (!j.ok) throw new Error(j.error);
+        var box = $('journal'), atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 20;
+        box.textContent = j.lines.join('\n') || 'No journal lines.';
+        if (atEnd || !box.dataset.seen) { box.scrollTop = box.scrollHeight; box.dataset.seen = '1'; }
+        $('foot').textContent = 'Last ' + j.lines.length + ' lines from the systemd journal (RAM on this box, archived daily for 14 days).';
+      });
+    } else {
+      p = LC.api('api/logs?since=' + range + '&limit=1000' + (stream ? '&stream=' + stream : '') +
+        ($('q').value.trim() ? '&q=' + encodeURIComponent($('q').value.trim()) : '')).then(function (j) {
+        if (!j.ok) throw new Error(j.error);
+        render(j);
+      });
+    }
+    return p.then(function () { LC.banner(''); }, function (e) { LC.banner('Could not load logs: ' + e.message); })
+      .then(function () { timer = setTimeout(function () { if (!document.hidden) load(); else timer = setTimeout(load, 5000); }, 30000); });
+  }
+
+  $('streams').innerHTML = STREAMS.map(function (s) {
+    return '<button type="button" class="chip" data-s="' + s[0] + '" aria-pressed="' + (s[0] === stream) + '">' + esc(s[1]) + '</button>';
+  }).join('');
+  $('streams').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    stream = b.dataset.s;
+    Array.prototype.forEach.call(this.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+    var u = new URL(location.href); if (stream) u.searchParams.set('stream', stream); else u.searchParams.delete('stream');
+    history.replaceState(null, '', u);
+    load();
+  });
+  $('range').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    range = Number(b.dataset.s);
+    Array.prototype.forEach.call(this.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+    load();
+  });
+  var qt; $('q').addEventListener('input', function () { clearTimeout(qt); qt = setTimeout(load, 300); });
+  $('unit').addEventListener('change', load);
+  $('noise').addEventListener('change', load);
+  load();
+})();
+</script>
+</body>
+</html>

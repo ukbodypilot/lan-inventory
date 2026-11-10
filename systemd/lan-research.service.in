@@ -1,0 +1,16 @@
+[Unit]
+Description=LAN inventory: ask the standing Claude Code tmux session to research devices the sweep could not identify
+After=network-online.target lan-collect.service
+
+[Service]
+Type=oneshot
+User=@USER@
+Environment=HOME=@HOME@
+Environment=PATH=@HOME@/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=CLAUDE_BIN=@CLAUDE@
+WorkingDirectory=@DIR@
+ExecStart=@DIR@/venv/bin/python @DIR@/research.py
+TimeoutStartSec=1h
+Nice=15
+# the tmux server started by research.py must outlive this oneshot (the standing session is the point)
+KillMode=process

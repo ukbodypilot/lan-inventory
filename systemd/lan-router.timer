@@ -1,0 +1,12 @@
+[Unit]
+Description=Web-interface snapshot of the Deco router every 5 minutes
+
+[Timer]
+OnBootSec=1min
+# Web interface (:80) only. Full TMP reads (port 20001) are hourly (lan-router-full.timer) and on
+# "Refresh now": on 2026-10-25 that port closed for 45+ min and frequent connections were suspected.
+OnUnitActiveSec=5min
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target

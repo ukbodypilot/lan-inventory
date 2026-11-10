@@ -1,0 +1,11 @@
+[Unit]
+Description=LAN ARP presence tracker + inventory rebuild
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=@USER@
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+NoNewPrivileges=yes
+ExecStart=/usr/bin/python3 @DIR@/presence.py

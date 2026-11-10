@@ -1,0 +1,9 @@
+[Unit]
+Description=Deco router snapshot, web interface only (full TMP reads: lan-router-full.timer + Refresh now)
+After=network-online.target
+
+[Service]
+Type=oneshot
+TimeoutStartSec=5min
+User=@USER@
+ExecStart=@DIR@/venv/bin/python3 @DIR@/router_collect.py --web-only

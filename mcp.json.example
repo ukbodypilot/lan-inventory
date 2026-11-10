@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "deco-router": {
+      "command": "@DIR@/venv/bin/python3",
+      "args": ["@DIR@/deco_mcp_server.py"]
+    }
+  }
+}

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the LAN fingerprinting sweep twice a day (night: everything idle; evening: laptops and phones awake)
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+OnCalendar=*-*-* 19:30:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

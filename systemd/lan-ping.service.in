@@ -1,0 +1,15 @@
+[Unit]
+Description=LAN continuous traceroute for the Ping page (mtr every PING_INTERVAL s)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=@USER@
+WorkingDirectory=@DIR@
+ExecStart=@DIR@/venv/bin/python3 @DIR@/ping_collect.py
+Restart=always
+RestartSec=10
+Nice=5
+
+[Install]
+WantedBy=multi-user.target
