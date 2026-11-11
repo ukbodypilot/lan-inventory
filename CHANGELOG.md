@@ -4,6 +4,12 @@ The version is the git tag. Releases before 2.0.0 were never tagged.
 
 ## Unreleased
 
+- **SSDP searches are no longer read as services.** The listener filed the `ST` of an `M-SEARCH` request under the
+  sender as if the sender offered it, so a phone whose casting app looks for Roku, webOS and Samsung TVs was
+  labelled a Roku. Only `NOTIFY` announcements and replies count as what a device offers; what it searches for is
+  kept apart as `ssdp_searches`. Identity cache `VERSION` 5.
+- **A game console is not "disagreeing" with its media renderer.** A console that also answers as a UPnP
+  MediaRenderer no longer gets an "evidence disagrees" flag and a lowered confidence.
 - **Names are checked, not trusted.** Every name a device gives (its own API, AirPlay, DHCP, mDNS, UPnP, the router
   label) is kept per source. A device whose names point to different people, or claim a product or OS the hardware
   is not, gets a "name mismatch" tag and counts under "Needs attention".

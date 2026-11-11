@@ -14,7 +14,7 @@ import os
 import re
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = 3  # bump when rules change meaning: build_report drops identities cached under an older version
+VERSION = 5  # bump when rules change meaning: build_report drops identities cached under an older version
 
 # How far each kind of evidence can be trusted on its own (0-100).
 WEIGHT = {
@@ -27,7 +27,7 @@ WEIGHT = {
 WEAK = 0.6          # a rule marked strong=False counts this much
 HIGH, MEDIUM = 75, 30
 # A generic type is compatible with (and yields to) the specific ones listed; "IoT" is compatible with anything.
-GENERIC = {"IoT": None, "Computer": {"Laptop", "Desktop", "Server"}, "Media device": {"TV", "Speaker"},
+GENERIC = {"IoT": None, "Computer": {"Laptop", "Desktop", "Server"}, "Media device": {"TV", "Speaker", "Game console"},  # a console is also a DLNA MediaRenderer
            "Access Point": {"Router"}}
 
 GENERIC_NAMES = {"", "(unknown)", "(name not found)", "unknown", "none", "linux", "localhost", "android",

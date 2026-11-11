@@ -126,7 +126,9 @@ def on_dhcp(pkt):
 
 def ssdp_headers(payload):
     h = {}
-    for l in payload.decode(errors="replace").split("\r\n")[1:]:
+    lines = payload.decode(errors="replace").split("\r\n")
+    h["_start"] = lines[0].strip().upper()  # M-SEARCH * (a query), NOTIFY * (an announcement) or HTTP/1.1 200 (a reply)
+    for l in lines[1:]:
         if ":" in l:
             k, v = l.split(":", 1)
             h[k.strip().lower()] = v.strip()
@@ -137,13 +139,25 @@ def record_ssdp(mac, ip, h):
     """File one SSDP message under `mac`. Returns a description URL worth fetching, or None."""
     if not (h.get("server") or h.get("nt") or h.get("st")):
         return None
+    if h.get("_start", "").startswith("M-SEARCH"):
+        # A QUERY: its ST is what the sender is looking for, not what it offers (a phone's casting / TV-remote
+        # app asks for roku:ecp, webOS and Samsung at once). Keep it apart so it is never read as the device's type.
+        t = h.get("st")
+        if t:
+            with lock:
+                hrec = host(mac, "ssdp", ip)
+                q = hrec.setdefault("ssdp_searches", [])
+                if t[:120] not in q and len(q) < 20:
+                    q.append(t[:120])
+            dirty.set()
+        return None
     with lock:
         hrec = host(mac, "ssdp", ip)
         r = hrec.setdefault("ssdp", {"server": "", "types": []})
         r["last_seen"] = hrec["last_seen"]
         if h.get("server"):
             r["server"] = h["server"][:160]
-        t = h.get("nt") or h.get("st")
+        t = h.get("nt") or h.get("st")  # NOTIFY's NT, or the ST of a reply: both are what this device offers
         if t and t not in r["types"] and len(r["types"]) < 20:
             r["types"].append(t[:120])
         loc = h.get("location", "")

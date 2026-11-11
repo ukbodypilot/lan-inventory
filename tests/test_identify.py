@@ -38,6 +38,14 @@ class Rules(unittest.TestCase):
         self.assertEqual((r["type"], r["model"], r["os_family"], r["confidence"]),
                          ("Media device", "Roku Express+ (3910RW)", "Roku OS", "high"))
 
+    def test_console_that_is_also_a_media_renderer_does_not_disagree(self):
+        r = identify.identify(ev(
+            dhcp={"hostname": "GAMEBOX", "vendor_class": "MSFT 5.0 XBOX"}, vendor="Microsoft Corporation",
+            ssdp={"description": {"deviceType": "urn:schemas-upnp-org:device:MediaRenderer:1", "friendlyName": "GAMEBOX",
+                                  "modelName": "Xbox One", "manufacturer": "Microsoft Corporation"}}))
+        self.assertEqual(r["type"], "Game console")
+        self.assertIsNone(r["conflict"])
+
     def test_homekit_without_category_gives_no_type(self):
         r = identify.identify(ev(mdns_records=[{"svc": "_hap._tcp", "instance": "Thing", "txt": {}}]))
         self.assertIsNone(r["type"])
