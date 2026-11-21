@@ -1,0 +1,99 @@
+/* lan-inventory — shared theme ("patch panel"). Loaded first by every page.
+
+   The look borrows from the network closet: rack-steel background,
+   faceplate panels, ink text, and the port LEDs as the only bright
+   colours. Colour carries meaning:
+     --led / --ok   link light: online, healthy
+     --amber        activity/attention: needs a look, warning
+     --red          fault: conflict, mismatch, error
+     --unlit        port with nothing lit: offline, unknown
+     --petrol       interactive: links, focus, the selected control
+     --tape         label-maker tape: something a person labelled by hand
+   Spend boldness on the patch panel (Devices page); keep the rest quiet.
+
+   Two older token vocabularies are aliased at the bottom (index.html used
+   --muted/--accent/--s1…, console.css used --mut/--acc/--soft…), so page
+   rules keep working; new rules should use the names in the first block. */
+
+@font-face { font-family: 'Overpass'; src: url('fonts/Overpass.woff2') format('woff2-variations'), url('fonts/Overpass.woff2') format('woff2');
+             font-weight: 100 900; font-style: normal; font-display: swap;
+             unicode-range: U+0000-00B6, U+00B8-FFFF; }   /* Overpass's middle dot eats the space after it; let it fall back */
+@font-face { font-family: 'Overpass Mono'; src: url('fonts/OverpassMono.woff2') format('woff2-variations'), url('fonts/OverpassMono.woff2') format('woff2');
+             font-weight: 300 700; font-style: normal; font-display: swap; }
+
+:root {
+  color-scheme: light;
+  --steel: #dde1e5;  --face: #f6f7f8;  --well: #e9ecef;
+  --ink: #15181b;    --ink2: #3a4149;  --mute: #5f6872;
+  --rule: #c5cbd2;   --rule-soft: #e5e8eb;
+  --petrol: #0b6680; --petrol-strong: #084e63; --petrol-soft: #d9eaf0;
+  --led: #17a54b;    --ok: #11793a;    --ok-soft: #dff1e5;  --ok-line: #a6d6b7;
+  --amber: #a66400;  --amber-led: #f0a21a; --amber-soft: #fbefd8; --amber-line: #ebc684; --amber-text: #5a3b0c;
+  --red: #c4281e;    --red-soft: #fbe4e1; --red-line: #eeb1aa;
+  --unlit: #a9b1ba;
+  --jack: #2a2f35;   --jack-hi: #3b424a;   /* empty RJ45 socket */
+  --tape: #f5d339;   --tape-ink: #1b1705;
+  --c-wired: #4d5965; --c-5g: #0b6680; --c-24: #6fb0c4;   /* how devices connect */
+
+  --font: 'Overpass', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Overpass Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --r: 5px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --steel: #111315;  --face: #1a1d20;  --well: #141619;
+    --ink: #e8ebee;    --ink2: #c2c8cf;  --mute: #939ca6;
+    --rule: #2c3136;   --rule-soft: #22262a;
+    --petrol: #52b8d4; --petrol-strong: #93d6e8; --petrol-soft: #14303a;
+    --led: #36d36f;    --ok: #4bd17c;    --ok-soft: #12301d;  --ok-line: #285c3a;
+    --amber: #f2b13c;  --amber-led: #f2b13c; --amber-soft: #33270f; --amber-line: #5d4520; --amber-text: #f0d7aa;
+    --red: #ff6f62;    --red-soft: #3a1c19; --red-line: #6a2c26;
+    --unlit: #454d56;
+    --jack: #0b0c0e;   --jack-hi: #24282d;
+    --c-wired: #9aa6b2; --c-5g: #52b8d4; --c-24: #2c7389;
+  }
+}
+
+/* ── aliases: index.html vocabulary ─────────────────────────────── */
+:root {
+  --bg: var(--steel); --card: var(--face); --fg: var(--ink); --fg2: var(--ink2); --muted: var(--mute);
+  --line: var(--rule); --grid: var(--rule-soft); --chip: var(--rule-soft);
+  --accent: var(--petrol); --accent-soft: var(--petrol-soft);
+  --s1: var(--led); --s2: var(--c-5g); --s3: var(--c-24); --s-none: var(--unlit);
+  --o1: var(--ink); --o2: var(--ink2); --o3: var(--unlit); --o4: var(--rule);
+  --warn: var(--amber); --warn-soft: var(--amber-soft); --crit: var(--red); --crit-soft: var(--red-soft);
+  --off: var(--unlit); --shadow: none;
+  /* ── console.css vocabulary ── */
+  --mut: var(--mute); --soft: var(--rule-soft);
+  --acc: var(--petrol); --acc-strong: var(--petrol-strong); --acc-soft: var(--petrol-soft);
+  --warn-strong: var(--amber); --warn-text: var(--amber-text); --warn-bg: var(--amber-soft); --warn-line: var(--amber-line);
+  --ok-bg: var(--ok-soft); --bad: var(--red); --bad-bg: var(--red-soft); --bad-line: var(--red-line);
+  --off-bg: var(--rule-soft); --off-line: var(--unlit); --toggle-off: var(--unlit);
+  --hero: var(--ink); --hero-fg: var(--face); --hero-mut: var(--rule);
+}
+
+/* ── shared primitives ──────────────────────────────────────────── */
+html { -webkit-text-size-adjust: 100%; }
+body { font-family: var(--font); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+.mono, code, kbd { font-family: var(--font-mono); }
+:focus-visible { outline: 2px solid var(--petrol); outline-offset: 2px; }
+::selection { background: var(--petrol); color: var(--face); }
+
+/* Label-maker tape: only for things a person labelled by hand. */
+.tape {
+  display: inline-block; background: var(--tape); color: var(--tape-ink);
+  font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; line-height: 1.5;
+  padding: 0 6px; border-radius: 1px; vertical-align: 1px; white-space: nowrap;
+  box-shadow: 0 1px 0 rgba(0,0,0,.18);
+}
+/* Port LED. <i class="led on"></i> */
+.led { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--unlit); flex: none; }
+.led.on   { background: var(--led);   box-shadow: 0 0 5px color-mix(in srgb, var(--led) 70%, transparent); }
+.led.warn { background: var(--amber-led); box-shadow: 0 0 5px color-mix(in srgb, var(--amber-led) 70%, transparent); }
+.led.bad  { background: var(--red);   box-shadow: 0 0 5px color-mix(in srgb, var(--red) 70%, transparent); }
+kbd { font-size: 11px; padding: 0 5px; border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 3px; background: var(--face); color: var(--mute); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+}

@@ -4,6 +4,20 @@ The version is the git tag. Releases before 2.0.0 were never tagged.
 
 ## Unreleased
 
+- **New look: "patch panel".** The web pages borrow from the network closet: rack-steel background, faceplate
+  panels and a dark top rail, with the port LEDs as the only bright colours (green online, amber needs attention,
+  red conflict, grey offline). A hand-labelled device wears a strip of label-maker tape. Light and dark themes.
+  Overpass and Overpass Mono are bundled in `web/fonts/` (OFL), so no page loads fonts from Google any more.
+  Shared tokens live in the new `web/panel.css`.
+- **Address map as a patch panel.** The /24 is drawn as 256 ports at the top of the Devices page; empty runs of
+  32 fold into one band. Selecting a port (mouse or keyboard) opens that device in the list.
+- **Devices list first.** The list now follows the address map instead of six charts, which move to a Trends
+  section below it. The five number cards are now one strip of filter buttons (online, needs attention, new this
+  week); "New" is also a filter.
+- **Easier to work through a long list.** The search bar and table header stay visible while scrolling, with a
+  "Showing N of M" count. `/` focuses search and Esc clears it. Search, type and filter are kept in the URL
+  (`?q=`, `?type=`, `?show=`), so a filtered view can be bookmarked; an empty result offers to clear the filters.
+- The router pages no longer draw ordinary data (wired clients, upload) in the warning colour.
 - **SSDP searches are no longer read as services.** The listener filed the `ST` of an `M-SEARCH` request under the
   sender as if the sender offered it, so a phone whose casting app looks for Roku, webOS and Samsung TVs was
   labelled a Roku. Only `NOTIFY` announcements and replies count as what a device offers; what it searches for is

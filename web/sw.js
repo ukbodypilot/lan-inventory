@@ -1,8 +1,8 @@
 // Offline cache for the LAN inventory page. Only registers on HTTPS or localhost.
-var CACHE = 'lan-inventory-sw-v1';
+var CACHE = 'lan-inventory-sw-v2';
 
 self.addEventListener('install', function (e) {
-  e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(['./', 'index.html']); }));
+  e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(['./', 'index.html', 'panel.css', 'nav.css', 'fonts/Overpass.woff2', 'fonts/OverpassMono.woff2']); }));
   self.skipWaiting();
 });
 

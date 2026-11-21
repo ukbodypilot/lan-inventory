@@ -4,133 +4,175 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LAN Inventory</title>
+<link rel="stylesheet" href="panel.css">
 <style>
-  :root {
-    color-scheme: light;
-    --bg: #f4f5f7; --card: #ffffff; --fg: #15191e; --fg2: #4a5361; --muted: #6b7482; --line: #e1e5ea; --grid: #edf0f3;
-    --chip: #eef1f5; --accent: #2a78d6; --accent-soft: #e6f0fc;
-    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s-none: #c3c9d2;
-    --o1: #184f95; --o2: #2a78d6; --o3: #86b6ef; --o4: #c3c9d2;
-    --ok: #1a7f4b; --ok-soft: #e3f4ea; --warn: #a85a00; --warn-soft: #fdf0dc; --crit: #c93433; --crit-soft: #fde8e7;
-    --off: #aab1bc; --shadow: 0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.06);
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      color-scheme: dark;
-      --bg: #101317; --card: #191d23; --fg: #eceef1; --fg2: #c2c8d1; --muted: #939cab; --line: #2a3039; --grid: #232830;
-      --chip: #232830; --accent: #5b9df0; --accent-soft: #1c2b44;
-      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s-none: #4a525e;
-      --o1: #86b6ef; --o2: #3987e5; --o3: #1c5cab; --o4: #4a525e;
-      --ok: #4cc38a; --ok-soft: #153325; --warn: #f0a050; --warn-soft: #3a2a12; --crit: #f07a79; --crit-soft: #3d1c1c;
-      --off: #5a6370; --shadow: none;
-    }
-  }
+  /* Devices page. Tokens and fonts come from panel.css. */
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  main { max-width: 1200px; margin: 0 auto; padding: 20px 16px 56px; }
-  h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
-  h2 { font-size: 13px; font-weight: 600; margin: 0; color: var(--fg2); }
-  .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin-bottom: 16px; }
-  .sub { color: var(--muted); font-size: 13px; }
-  .live { display: inline-flex; align-items: center; gap: 6px; }
-  .live i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 0 var(--ok); animation: pulse 2.4s infinite; }
-  @keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 55%, transparent); } 70%, 100% { box-shadow: 0 0 0 7px transparent; } }
-  @media (prefers-reduced-motion: reduce) { .live i { animation: none; } }
-  #banner { display: none; margin: 0 0 14px; padding: 8px 12px; border-radius: 8px; background: var(--warn-soft); border: 1px solid var(--warn); color: var(--warn); font-size: 13px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
-  .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 12px; }
-  .kpi { padding: 14px 16px; text-align: left; font: inherit; color: inherit; cursor: pointer; display: flex; flex-direction: column; justify-content: flex-start; width: 100%; }
-  .kpi:hover, .kpi[aria-pressed=true] { border-color: var(--accent); }
-  .kpi[aria-pressed=true] { background: var(--accent-soft); }
-  .kpi .lab { font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
-  .kpi .val { font-size: 30px; font-weight: 650; letter-spacing: -.02em; line-height: 1.15; margin-top: 2px; }
-  .kpi .val small { font-size: 14px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
-  .kpi .foot { font-size: 12px; color: var(--muted); margin-top: 6px; min-height: 18px; }
-  .meter { height: 6px; border-radius: 3px; background: var(--accent-soft); overflow: hidden; margin-top: 8px; }
-  .meter i { display: block; height: 100%; background: var(--s1); border-radius: 3px; }
-  .grid2 { display: grid; grid-template-columns: 1.55fr 1fr; gap: 12px; margin-bottom: 12px; align-items: stretch; }
-  .grid2 .panel { display: flex; flex-direction: column; } .grid2 .chartwrap { flex: 1; min-height: 190px; }
-  .morebtn { border: 0; background: none; color: var(--accent); font: inherit; font-size: 12.5px; cursor: pointer; padding: 6px 0 0; text-align: left; }
-  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 18px; }
-  .panel { padding: 14px 16px 12px; min-width: 0; }
-  .ph { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; min-height: 26px; }
-  .ph .hint { font-size: 12px; color: var(--muted); }
-  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-  .seg button { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; padding: 3px 10px; cursor: pointer; }
-  .seg button[aria-pressed=true] { background: var(--accent-soft); color: var(--fg); font-weight: 600; }
-  svg text { font: 11px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(--muted); }
-  .chartwrap { position: relative; }
-  .tip { position: absolute; pointer-events: none; background: var(--fg); color: var(--card); font-size: 12px; padding: 5px 8px; border-radius: 6px; white-space: nowrap; transform: translate(-50%, -100%); display: none; z-index: 5; }
-  .tip b { font-weight: 650; }
-  .bars { display: grid; grid-template-columns: auto 1fr auto; gap: 5px 10px; align-items: center; font-size: 13px; }
-  .bars button { display: contents; cursor: pointer; font: inherit; color: inherit; }
-  .bars .bl { display: flex; align-items: center; gap: 7px; white-space: nowrap; color: var(--fg2); }
-  .bars .bt { height: 14px; display: flex; gap: 2px; }
-  .bars .bt i { display: block; height: 100%; border-radius: 0 4px 4px 0; background: var(--s1); min-width: 2px; }
-  .bars .bt i.offl { background: var(--o3); }
-  .bars .bv { font-variant-numeric: tabular-nums; color: var(--fg2); text-align: right; }
-  .bars button:hover .bl, .bars button[aria-pressed=true] .bl { color: var(--accent); font-weight: 600; }
-  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--fg2); margin-top: 8px; }
-  .legend span { display: inline-flex; align-items: center; gap: 5px; }
-  .legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
-  .segbar { display: flex; gap: 2px; height: 16px; border-radius: 4px; overflow: hidden; }
-  .segbar i { display: block; height: 100%; min-width: 3px; }
-  .map { display: grid; grid-template-columns: repeat(32, 1fr); gap: 2px; }
-  .map i { aspect-ratio: 1; border-radius: 2px; background: var(--grid); display: block; }
-  .map i.on { background: var(--s1); cursor: pointer; } .map i.offl { background: var(--o3); cursor: pointer; }
-  .map i.conf { background: var(--crit); cursor: pointer; } .map i.self { outline: 2px solid var(--fg); outline-offset: 0; }
-  .map i:hover { outline: 2px solid var(--accent); }
-  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
-  input[type=search] { flex: 1 1 240px; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--fg); font: inherit; }
-  input[type=search]:focus-visible, button:focus-visible, tr.row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-size: 15px; line-height: 1.45; }
+  main { max-width: 1240px; margin: 0 auto; padding: 22px 16px 56px; }
+  h1 { font-size: 28px; font-weight: 700; margin: 0; letter-spacing: -.01em; }
+  h2 { font-size: 15px; font-weight: 700; margin: 0; color: var(--fg); }
+  .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin-bottom: 14px; }
+  .sub { color: var(--muted); font-size: 13.5px; }
+  .live { display: inline-flex; align-items: center; gap: 7px; }
+  .live i { width: 8px; height: 8px; border-radius: 50%; background: var(--led); box-shadow: 0 0 0 0 var(--led); animation: pulse 2.4s infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--led) 55%, transparent); } 70%, 100% { box-shadow: 0 0 0 7px transparent; } }
+  #banner { display: none; margin: 0 0 14px; padding: 9px 12px; border-radius: var(--r); background: var(--warn-soft); border: 1px solid var(--amber-line); color: var(--amber-text); font-size: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); }
+
+  /* ── Patch panel: the /24 as 256 ports. The page's one bold element. ── */
+  .rack { position: relative; background: linear-gradient(180deg, color-mix(in srgb, var(--face) 70%, #fff 0%) 0%, var(--face) 100%);
+          border: 1px solid var(--line); border-radius: var(--r); padding: 12px 40px 14px; margin-bottom: 14px; }
+  .rack::before, .rack::after { content: ''; position: absolute; top: 14px; bottom: 14px; width: 9px;
+          background: radial-gradient(circle, var(--rule) 3px, transparent 3.5px) center top / 9px 22px repeat-y; }
+  .rack::before { left: 14px; } .rack::after { right: 14px; }
+  .rack-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin-bottom: 10px; }
+  .rack-head .hint { font-size: 13px; color: var(--muted); }
+  .rack-head .legend { margin: 0 0 0 auto; }
+  .ports { display: flex; flex-direction: column; gap: 5px; }
+  .prow { display: grid; grid-template-columns: 3.4em repeat(4, minmax(0, 1fr)); gap: 0 14px; align-items: center; }
+  .prow .pl { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); text-align: right; padding-right: 2px; }
+  .pgrp { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; }
+  .port { position: relative; height: 22px; border-radius: 3px; background: var(--jack); cursor: default;
+          box-shadow: inset 0 2px 3px rgba(0,0,0,.55); }
+  .port::before { content: ''; position: absolute; left: 22%; right: 22%; bottom: 3px; height: 5px; border-radius: 1px 1px 0 0; background: var(--jack-hi); }
+  .port::after  { content: ''; position: absolute; top: 3px; right: 3px; width: 5px; height: 5px; border-radius: 50%; background: transparent; }
+  .port.on, .port.offl, .port.conf { cursor: pointer; background: color-mix(in srgb, var(--jack) 75%, var(--c-5g)); }
+  .port.on::after   { background: var(--led); box-shadow: 0 0 5px var(--led); }
+  .port.offl::after { background: var(--unlit); }
+  .port.conf::after { background: var(--red); box-shadow: 0 0 5px var(--red); }
+  .port.self { outline: 2px solid var(--petrol); outline-offset: 1px; }
+  .port:hover { outline: 2px solid var(--petrol); outline-offset: 1px; }
+  .prow.gap { grid-template-columns: 3.4em 1fr; }
+  .prow.gap .band { height: 6px; border-top: 1px dashed var(--line); margin-top: 3px; font-size: 11.5px; color: var(--muted); }
+  .prow.gap .band span { position: relative; top: -9px; background: var(--face); padding: 0 6px; margin-left: 8px; }
+
+  /* ── Status strip (filters) ── */
+  .status { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .stat { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 4px 14px; font: inherit; color: var(--fg2);
+          background: var(--card); border: 1px solid var(--line); border-radius: var(--r); text-align: left; }
+  button.stat { cursor: pointer; } button.stat:hover { border-color: var(--petrol); }
+  .stat b { font-size: 18px; font-weight: 700; color: var(--fg); }
+  .stat .foot { font-size: 12.5px; color: var(--muted); }
+  .stat[aria-pressed=true] { background: var(--ink); border-color: var(--ink); color: var(--face); }
+  .stat[aria-pressed=true] b, .stat[aria-pressed=true] .foot { color: var(--face); }
+  .meter { width: 64px; height: 6px; border-radius: 1px; background: var(--rule-soft); overflow: hidden; }
+  .meter i { display: block; height: 100%; background: var(--ink2); }
+
+  /* ── Toolbar: stays put while the list scrolls ── */
+  .toolbar { position: sticky; top: 0; z-index: 6; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+             padding: 10px 0; margin-bottom: 2px; background: var(--bg); }
+  .searchbox { position: relative; flex: 1 1 260px; display: flex; }
+  input[type=search] { flex: 1; min-height: 42px; padding: 0 44px 0 12px; border-radius: var(--r); border: 1px solid var(--line); background: var(--card); color: var(--fg); font: inherit; }
+  input[type=search]:focus-visible { outline: none; border-color: var(--petrol); box-shadow: 0 0 0 3px var(--petrol-soft); }
+  .searchbox kbd { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+  .count { font-size: 13px; color: var(--muted); white-space: nowrap; margin-left: auto; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: var(--card); }
+  .seg button { border: 0; background: transparent; color: var(--fg2); font: inherit; font-size: 13.5px; padding: 0 12px; min-height: 40px; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed=true] { background: var(--ink); color: var(--face); font-weight: 600; }
+  #range button { min-height: 28px; font-size: 12.5px; padding: 0 10px; }
+  button:focus-visible, tr.row:focus-visible { outline: 2px solid var(--petrol); outline-offset: 2px; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-  .chip { border: 1px solid var(--line); background: var(--card); color: var(--fg2); border-radius: 999px; padding: 4px 11px 4px 8px; font: inherit; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .chip { border: 1px solid var(--line); background: var(--card); color: var(--fg2); border-radius: 3px; padding: 0 10px 0 8px; min-height: 32px;
+          font: inherit; font-size: 13.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .chip:hover { border-color: var(--petrol); }
   .chip svg { width: 15px; height: 15px; }
-  .chip[aria-pressed=true] { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .chip .n { opacity: .7; font-variant-numeric: tabular-nums; }
+  .chip[aria-pressed=true] { background: var(--ink); border-color: var(--ink); color: var(--face); }
+  .chip .n { opacity: .65; }
+
+  /* ── Device list ── */
   table { width: 100%; border-collapse: separate; border-spacing: 0; }
-  .tablecard { overflow: hidden; }
   th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
-  th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); cursor: pointer; user-select: none; white-space: nowrap; font-weight: 600; background: var(--card); }
-  th[aria-sort] { color: var(--fg); }
-  tr.row { cursor: pointer; } tr.row:hover td { background: var(--chip); }
-  tr.row.off .nm, tr.row.off .ic { opacity: .62; }
-  tr.detail td { background: var(--bg); padding: 16px; }
-  .dev { display: flex; align-items: center; gap: 11px; min-width: 0; }
-  .ic { flex: none; width: 36px; height: 36px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; position: relative; }
+  thead th { position: sticky; top: var(--tb-h, 62px); z-index: 5; font-size: 13px; color: var(--muted); cursor: pointer; user-select: none; white-space: nowrap;
+             font-weight: 600; background: var(--card); box-shadow: 0 1px 0 var(--line); }
+  thead th:first-child { border-top-left-radius: var(--r); } thead th:last-child { border-top-right-radius: var(--r); }
+  th[aria-sort] { color: var(--fg); } th[aria-sort=ascending]::after { content: ' ↑'; } th[aria-sort=descending]::after { content: ' ↓'; }
+  tbody tr:last-child td { border-bottom: 0; }
+  tr.row { cursor: pointer; } tr.row:hover td { background: color-mix(in srgb, var(--petrol-soft) 45%, var(--card)); }
+  tr.row[aria-expanded=true] td { background: var(--petrol-soft); border-bottom-color: transparent; }
+  tr.row.off .nm, tr.row.off .ic { opacity: .6; }
+  tr.detail td { background: var(--well); padding: 14px; border-bottom: 1px solid var(--line); }
+  .dev { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .ic { flex: none; width: 36px; height: 36px; border-radius: 4px; background: var(--well); color: var(--ink2); border: 1px solid var(--line);
+        display: grid; place-items: center; position: relative; }
   .ic svg { width: 20px; height: 20px; }
-  .ic .st { position: absolute; right: -3px; bottom: -3px; width: 11px; height: 11px; border-radius: 50%; background: var(--off); border: 2px solid var(--card); }
-  .ic .st.on { background: var(--ok); }
-  .nm { min-width: 0; } .nm b { font-weight: 600; } .nm .m { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
-  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  .ic .st { position: absolute; right: -4px; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--unlit); border: 2px solid var(--card); }
+  .ic .st.on { background: var(--led); box-shadow: 0 0 5px var(--led); }
+  .nm { min-width: 0; } .nm b { font-weight: 650; } .nm .m { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+  .mono { font-size: 13px; }
   .muted { color: var(--muted); } .stale { text-decoration: line-through; color: var(--muted); }
-  .tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--chip); color: var(--fg2); margin-left: 6px; white-space: nowrap; vertical-align: 1px; }
-  .tag.warn { background: var(--warn-soft); color: var(--warn); } .tag.crit { background: var(--crit-soft); color: var(--crit); } .tag.new { background: var(--ok-soft); color: var(--ok); }
-  .conf { display: inline-flex; gap: 2px; vertical-align: middle; margin-right: 6px; }
-  .conf i { width: 5px; height: 12px; border-radius: 1.5px; background: var(--o4); }
-  .conf i.f { background: var(--s1); }
-  .sig { display: inline-flex; gap: 1.5px; align-items: flex-end; height: 12px; margin-right: 5px; vertical-align: -1px; }
-  .sig i { width: 3px; background: var(--o4); border-radius: 1px; } .sig i.f { background: var(--fg2); }
+  .tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600; padding: 0 6px; border-radius: 2px; line-height: 1.6;
+         border: 1px solid var(--line); color: var(--fg2); margin-left: 6px; white-space: nowrap; vertical-align: 1px; }
+  .tag.warn { border-color: var(--amber-line); background: var(--warn-soft); color: var(--amber); }
+  .tag.crit { border-color: var(--red-line); background: var(--crit-soft); color: var(--red); }
+  .tag.new  { border-color: var(--ok-line); background: var(--ok-soft); color: var(--ok); }
+  .nm .tape { margin-left: 6px; }
+  .conf { display: inline-flex; gap: 2px; vertical-align: middle; margin-right: 7px; }
+  .conf i { width: 4px; height: 12px; border-radius: 1px; background: var(--rule); }
+  .conf i.f { background: var(--ink2); }
+  .sig { display: inline-flex; gap: 1.5px; align-items: flex-end; height: 12px; margin-right: 6px; vertical-align: -1px; }
+  .sig i { width: 3px; background: var(--rule); border-radius: 1px; } .sig i.f { background: var(--ink2); }
   .strip { display: block; }
   .dgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
   .dcard { padding: 12px 14px; min-width: 0; }
-  .dcard h3 { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
-  dl { display: grid; grid-template-columns: 104px 1fr; gap: 4px 10px; margin: 0; font-size: 13px; }
+  .dcard h3 { font-size: 14px; color: var(--fg); margin: 0 0 8px; font-weight: 700; }
+  dl { display: grid; grid-template-columns: 110px 1fr; gap: 5px 10px; margin: 0; font-size: 13.5px; }
   dt { color: var(--muted); } dd { margin: 0; word-break: break-word; white-space: pre-line; }
-  ul.why { margin: 0; padding: 0; list-style: none; font-size: 13px; }
+  ul.why { margin: 0; padding: 0; list-style: none; font-size: 13.5px; }
   ul.why li { padding: 3px 0 3px 16px; position: relative; color: var(--fg2); }
-  ul.why li::before { content: ""; position: absolute; left: 2px; top: 10px; width: 6px; height: 6px; border-radius: 50%; background: var(--s1); }
-  ul.why li.no { color: var(--muted); } ul.why li.no::before { background: var(--o4); }
-  ul.why li.bad::before { background: var(--crit); } ul.why li.bad { color: var(--crit); }
-  .ports { display: flex; flex-wrap: wrap; gap: 5px; }
-  .port { font-size: 12px; border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; background: var(--card); }
-  .port b { font-family: ui-monospace, Menlo, monospace; font-weight: 600; }
+  ul.why li::before { content: ""; position: absolute; left: 2px; top: 10px; width: 6px; height: 6px; border-radius: 50%; background: var(--led); }
+  ul.why li.no { color: var(--muted); } ul.why li.no::before { background: var(--unlit); }
+  ul.why li.bad::before { background: var(--red); } ul.why li.bad { color: var(--red); }
+  .ports-open { display: flex; flex-wrap: wrap; gap: 5px; }
+  .ports-open .pt { font-size: 12.5px; border: 1px solid var(--line); border-radius: 3px; padding: 1px 7px; background: var(--card); }
+  .ports-open .pt b { font-family: var(--font-mono); font-weight: 600; }
   a { color: var(--accent); }
   .linkbtn { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; }
   .empty { padding: 28px; text-align: center; color: var(--muted); }
-  .note { color: var(--muted); font-size: 12px; margin-top: 14px; }
-  @media (max-width: 980px) { .kpis { grid-template-columns: repeat(3, 1fr); } .grid2, .grid3 { grid-template-columns: 1fr; } .dgrid { grid-template-columns: 1fr; } }
-  @media (max-width: 720px) { .kpis { grid-template-columns: repeat(2, 1fr); } .hide-sm { display: none; } th, td { padding: 8px 8px; } .map { grid-template-columns: repeat(16, 1fr); } }
+  .note { color: var(--muted); font-size: 13px; margin: 12px 0 0; max-width: 80ch; }
+
+  /* ── Trends (below the list) ── */
+  .section { font-size: 20px; margin: 34px 0 12px; }
+  .grid2 { display: grid; grid-template-columns: 1.55fr 1fr; gap: 12px; margin-bottom: 12px; align-items: stretch; }
+  .grid2 .panel { display: flex; flex-direction: column; } .grid2 .chartwrap { flex: 1; min-height: 150px; }
+  .panel { padding: 14px 16px 12px; min-width: 0; }
+  .ph { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; min-height: 28px; }
+  .ph .hint, .hint { font-size: 12.5px; color: var(--muted); }
+  .morebtn { border: 0; background: none; color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; padding: 6px 0 0; text-align: left; }
+  svg text { font: 11.5px var(--font); fill: var(--muted); }
+  .chartwrap { position: relative; }
+  .tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--face); font-size: 12.5px; padding: 5px 8px; border-radius: 3px; white-space: nowrap; transform: translate(-50%, -100%); display: none; z-index: 8; }
+  .tip b { font-weight: 700; }
+  .bars { display: grid; grid-template-columns: auto 1fr auto; gap: 5px 10px; align-items: center; font-size: 13.5px; }
+  .bars button { display: contents; cursor: pointer; font: inherit; color: inherit; }
+  .bars .bl { display: flex; align-items: center; gap: 7px; white-space: nowrap; color: var(--fg2); }
+  .bars .bt { height: 12px; display: flex; gap: 2px; }
+  .bars .bt i { display: block; height: 100%; border-radius: 0 2px 2px 0; background: var(--s1); min-width: 2px; }
+  .bars .bt i.offl { background: var(--o3); }
+  .bars .bv { color: var(--fg2); text-align: right; }
+  .bars button:hover .bl, .bars button[aria-pressed=true] .bl { color: var(--accent); font-weight: 650; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--fg2); margin-top: 8px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+  .legend .led { width: 7px; height: 7px; border-radius: 50%; }
+  .segbar { display: flex; gap: 2px; height: 14px; border-radius: 2px; overflow: hidden; }
+  .segbar i { display: block; height: 100%; min-width: 3px; }
+
+  @media (max-width: 980px) { .grid2 { grid-template-columns: 1fr; } .dgrid { grid-template-columns: 1fr; } }
+  @media (max-width: 720px) {
+    .hide-sm { display: none; } th, td { padding: 8px; }
+    .rack { padding: 10px 12px 12px; } .rack::before, .rack::after { display: none; }
+    .prow { grid-template-columns: 2.6em repeat(2, minmax(0, 1fr)); gap: 4px 8px; }
+    .prow .pgrp:nth-child(4) { grid-column: 2; } .prow .pgrp:nth-child(4), .prow .pgrp:nth-child(5) { margin-top: 0; }
+    .port { height: 18px; }
+    .rack-head .legend { margin-left: 0; width: 100%; }
+    .count { width: 100%; margin-left: 0; order: 3; }
+    .searchbox kbd { display: none; }
+    .status { display: grid; grid-template-columns: 1fr 1fr; }
+    .stat .foot, .stat .meter, .rack-head .legend span:last-child { display: none; }
+    .stat { padding: 4px 10px; }
+  }
 </style>
 <link rel="stylesheet" href="nav.css">
 </head>
@@ -146,44 +188,18 @@
   </div>
   <div id="banner" role="status"></div>
 
-  <div class="kpis" id="kpis"></div>
+  <section class="rack" aria-labelledby="map-title">
+    <div class="rack-head"><h2 id="map-title">Address map</h2><span class="hint" id="map-hint"></span>
+      <div class="legend"><span><i class="led on"></i>online</span><span><i class="led"></i>last held by an offline device</span><span><i class="led bad"></i>two devices on one address</span><span>select a port to open its device</span></div></div>
+    <div class="chartwrap"><div class="ports" id="map"></div><div class="tip" id="tip-map"></div></div>
+  </section>
 
-  <div class="grid2">
-    <section class="card panel">
-      <div class="ph"><h2>Devices online</h2>
-        <div class="seg" id="range"><button type="button" data-h="24" aria-pressed="true">24 h</button><button type="button" data-h="168" aria-pressed="false">7 d</button></div></div>
-      <div class="chartwrap"><svg id="chart-online" width="100%" height="190" role="img" aria-label="Devices online over time"></svg><div class="tip" id="tip-online"></div></div>
-      <div class="hint sub" id="online-note"></div>
-    </section>
-    <section class="card panel">
-      <div class="ph"><h2>What is on the network</h2><span class="hint">click to filter</span></div>
-      <div class="bars" id="types"></div>
-      <button type="button" class="morebtn" id="types-more"></button>
-      <div class="legend"><span><i style="background:var(--s1)"></i>online</span><span><i style="background:var(--o3)"></i>known, offline</span></div>
-    </section>
-  </div>
+  <div class="status" id="kpis"></div>
 
-  <div class="grid3">
-    <section class="card panel">
-      <div class="ph"><h2>Address map</h2><span class="hint" id="map-hint"></span></div>
-      <div class="chartwrap"><div class="map" id="map"></div><div class="tip" id="tip-map"></div></div>
-      <div class="legend"><span><i style="background:var(--s1)"></i>online</span><span><i style="background:var(--o3)"></i>last held by an offline device</span><span><i style="background:var(--crit)"></i>conflict</span><span><i style="background:var(--grid)"></i>free</span></div>
-    </section>
-    <section class="card panel">
-      <div class="ph"><h2>How sure the identification is</h2></div>
-      <div class="segbar" id="conf-bar"></div><div class="legend" id="conf-leg"></div>
-      <div class="ph" style="margin-top:16px"><h2>How online devices connect</h2></div>
-      <div class="segbar" id="link-bar"></div><div class="legend" id="link-leg"></div>
-    </section>
-    <section class="card panel">
-      <div class="ph"><h2>First-time devices per day</h2><span class="hint">last 14 days</span></div>
-      <div class="chartwrap"><svg id="chart-new" width="100%" height="150" role="img" aria-label="New devices per day"></svg><div class="tip" id="tip-new"></div></div>
-    </section>
-  </div>
-
-  <div class="bar">
-    <input type="search" id="q" placeholder="Search name, IP, MAC, vendor, service, note…" aria-label="Search">
-    <div class="seg" id="show"><button type="button" data-s="all" aria-pressed="true">All</button><button type="button" data-s="online" aria-pressed="false">Online</button><button type="button" data-s="attention" aria-pressed="false">Needs attention</button></div>
+  <div class="toolbar" id="toolbar">
+    <div class="searchbox"><input type="search" id="q" placeholder="Search name, IP, MAC, vendor, service, owner…" aria-label="Search devices" aria-keyshortcuts="/"><kbd>/</kbd></div>
+    <div class="seg" id="show" role="group" aria-label="Show"><button type="button" data-s="all" aria-pressed="true">All</button><button type="button" data-s="online" aria-pressed="false">Online</button><button type="button" data-s="attention" aria-pressed="false">Needs attention</button><button type="button" data-s="new" aria-pressed="false">New</button></div>
+    <span class="count" id="count" aria-live="polite"></span>
   </div>
   <div class="chips" id="chips"></div>
   <div class="card tablecard">
@@ -200,6 +216,34 @@
     address since). Confidence comes from the evidence listed under each device: a device answering its own vendor protocol outranks a host
     name, which outranks the router's category or the MAC vendor. “Curated” entries were labelled by hand.
   </p>
+
+  <h2 class="section">Trends</h2>
+  <div class="grid2">
+    <section class="card panel">
+      <div class="ph"><h2>Devices online</h2>
+        <div class="seg" id="range" role="group" aria-label="Time range"><button type="button" data-h="24" aria-pressed="true">24 h</button><button type="button" data-h="168" aria-pressed="false">7 d</button></div></div>
+      <div class="chartwrap"><svg id="chart-online" width="100%" height="190" role="img" aria-label="Devices online over time"></svg><div class="tip" id="tip-online"></div></div>
+      <div class="hint sub" id="online-note"></div>
+    </section>
+    <section class="card panel">
+      <div class="ph"><h2>What is on the network</h2><span class="hint">select a type to filter the list</span></div>
+      <div class="bars" id="types"></div>
+      <button type="button" class="morebtn" id="types-more"></button>
+      <div class="legend"><span><i style="background:var(--s1)"></i>online</span><span><i style="background:var(--o3)"></i>known, offline</span></div>
+    </section>
+  </div>
+  <div class="grid2">
+    <section class="card panel">
+      <div class="ph"><h2>How sure the identification is</h2></div>
+      <div class="segbar" id="conf-bar"></div><div class="legend" id="conf-leg"></div>
+      <div class="ph" style="margin-top:18px"><h2>How online devices connect</h2></div>
+      <div class="segbar" id="link-bar"></div><div class="legend" id="link-leg"></div>
+    </section>
+    <section class="card panel">
+      <div class="ph"><h2>First-time devices per day</h2><span class="hint">last 14 days</span></div>
+      <div class="chartwrap"><svg id="chart-new" width="100%" height="150" role="img" aria-label="New devices per day"></svg><div class="tip" id="tip-new"></div></div>
+    </section>
+  </div>
 </main>
 
 <script>
@@ -334,28 +378,25 @@
     var ds = state.data.devices, on = ds.filter(function (d) { return d.online_now; });
     var ident = ds.filter(function (d) { return d.identified; }).length;
     var att = ds.filter(function (d) { return attention(d).length; });
-    var fresh = ds.filter(isNew);
-    var series = clip((state.data.history || {}).online || [], 24);
-    var peak = series.reduce(function (m, p) { return Math.max(m, p[1]); }, 0);
+    var fresh = ds.filter(isNew), priv = ds.filter(function (d) { return d.randomized_mac; }).length;
     var pct = ds.length ? Math.round(ident / ds.length * 100) : 0;
-    var tiles = [
-      ['online', 'Online now', on.length + ' <small>of ' + ds.length + '</small>', spark(series, 90, 18) + (peak ? ' peak ' + peak : '')],
-      ['all', 'Known devices', ds.length, ds.filter(function (d) { return d.randomized_mac; }).length + ' use a private MAC'],
-      [null, 'Identified', pct + '<small>%</small>', '<div class="meter"><i style="width:' + pct + '%"></i></div>'],
-      ['attention', 'Need attention', att.length, att.length ? esc(countBy(att.map(function (d) { return attention(d)[0]; }))) : 'nothing flagged'],
-      ['new', 'New this week', fresh.length, fresh.length ? esc(fresh.slice(-2).map(displayName).join(', ')) : 'no first-time devices']
-    ];
-    $('kpis').innerHTML = tiles.map(function (t) {
-      return '<button type="button" class="card kpi" ' + (t[0] ? 'data-s="' + t[0] + '" aria-pressed="' + (state.show === t[0] && t[0] !== 'all') + '"' : 'disabled style="cursor:default"') + '>' +
-        '<div class="lab">' + t[1] + '</div><div class="val">' + t[2] + '</div><div class="foot">' + t[3] + '</div></button>';
-    }).join('');
+    function btn(s, inner, title) {
+      return '<button type="button" class="stat" data-s="' + s + '" aria-pressed="' + (state.show === s) + '" title="' + esc(title) + '">' + inner + '</button>';
+    }
+    $('kpis').innerHTML =
+      btn('online', '<i class="led on"></i><b>' + on.length + '</b> online <span class="foot">of ' + ds.length + ' known</span>', 'Show only devices online now') +
+      btn('attention', '<i class="led ' + (att.length ? 'warn' : '') + '"></i><b>' + att.length + '</b> need attention' +
+          (att.length ? ' <span class="foot">' + esc(countBy(att.map(function (d) { return attention(d)[0]; }))) + '</span>' : ''), 'Show devices that need a look') +
+      btn('new', '<b>' + fresh.length + '</b> new this week' + (fresh.length ? ' <span class="foot">' + esc(fresh.slice(-2).map(displayName).join(', ')) + '</span>' : ''), 'Show devices first seen in the last 7 days') +
+      '<div class="stat"><b>' + pct + '%</b> identified <span class="meter" aria-hidden="true"><i style="width:' + pct + '%"></i></span></div>' +
+      (priv ? '<div class="stat"><b>' + priv + '</b> use a private MAC</div>' : '');
     $('kpis').querySelectorAll('button[data-s]').forEach(function (b) {
       b.addEventListener('click', function () { setShow(state.show === b.dataset.s ? 'all' : b.dataset.s); });
     });
   }
   function countBy(list) {
     var c = {}; list.forEach(function (x) { c[x] = (c[x] || 0) + 1; });
-    return Object.keys(c).map(function (k) { return c[k] + ' ' + k; }).join(' · ');
+    return Object.keys(c).map(function (k) { return c[k] + ' ' + k; }).join(', ');
   }
   function setShow(s) {
     state.show = s;
@@ -452,13 +493,13 @@
   function renderSegs() {
     var ds = state.data.devices, n = function (f) { return ds.filter(f).length; };
     segbar('conf-bar', 'conf-leg', [
-      ['labelled by hand', n(function (d) { return d.confidence === 'curated'; }), 'var(--o1)'],
+      ['labelled by hand', n(function (d) { return d.confidence === 'curated'; }), 'var(--tape)'],
       ['high', n(function (d) { return d.confidence === 'high'; }), 'var(--o2)'],
       ['medium / researched', n(function (d) { return d.confidence === 'medium' || d.confidence === 'researched'; }), 'var(--o3)'],
       ['low / unknown', n(function (d) { return d.confidence === 'low' || !d.confidence; }), 'var(--o4)']]);
     var on = ds.filter(function (d) { return d.online_now; }), l = function (f) { return on.filter(f).length; };
     segbar('link-bar', 'link-leg', [
-      ['wired', l(function (d) { return d.link === 'wired'; }), 'var(--s1)'],
+      ['wired', l(function (d) { return d.link === 'wired'; }), 'var(--c-wired)'],
       ['Wi-Fi 5 GHz', l(function (d) { return d.link === '5GHz' || d.link === '6GHz'; }), 'var(--s2)'],
       ['Wi-Fi 2.4 GHz', l(function (d) { return d.link === '2.4GHz'; }), 'var(--s3)'],
       ['not in router list', l(function (d) { return !d.link; }), 'var(--s-none)']]);
@@ -467,35 +508,62 @@
   // ---- address map
   function renderMap() {
     var sub = state.data.subnet || '', m = /^(\d+\.\d+\.\d+)\.0\/24$/.exec(sub), box = $('map');
-    if (!m) { box.parentNode.parentNode.style.display = 'none'; return; }
+    if (!m) { box.closest('.rack').style.display = 'none'; return; }
     var by = {};
     state.data.devices.forEach(function (d) {
       if (!d.ip || d.ip.indexOf(m[1] + '.') !== 0) return;
       var k = +d.ip.split('.')[3]; (by[k] = by[k] || []).push(d);
     });
-    var html = '', used = 0;
-    for (var i = 0; i < 256; i++) {
+    function port(i) {
       var ds = by[i] || [], on = ds.filter(function (d) { return d.online_now; });
       var cls = on.length > 1 ? 'conf' : on.length ? 'on' : ds.length ? 'offl' : '';
-      if (on.length) used++;
-      html += '<i class="' + cls + (state.data.self_ip === m[1] + '.' + i ? ' self' : '') + '" data-i="' + i + '"></i>';
+      return '<i class="port ' + cls + (state.data.self_ip === m[1] + '.' + i ? ' self' : '') + '" data-i="' + i + '"' +
+        (ds.length ? ' role="button" tabindex="0" aria-label=".' + i + ' ' + esc(ds.map(displayName).join(', ')) + '"' : '') + '></i>';
     }
+    // 8 rows of 32 ports in blocks of 8. A run of rows with nothing on them
+    // folds into one dashed band, so the panel only spends height where
+    // devices are.
+    var html = '', used = 0, conflicts = 0, gapFrom = null;
+    for (var i = 0; i < 256; i++) { var o = (by[i] || []).filter(function (d) { return d.online_now; }).length; if (o) used++; if (o > 1) conflicts++; }
+    function flushGap(to) {
+      if (gapFrom == null) return;
+      html += '<div class="prow gap"><span class="pl"></span><div class="band"><span>.' + gapFrom + '–.' + to + ' unused</span></div></div>';
+      gapFrom = null;
+    }
+    for (var r = 0; r < 8; r++) {
+      var any = false;
+      for (var j = r * 32; j < r * 32 + 32; j++) if ((by[j] || []).length || state.data.self_ip === m[1] + '.' + j) any = true;
+      if (!any) { if (gapFrom == null) gapFrom = r * 32; continue; }
+      flushGap(r * 32 - 1);
+      html += '<div class="prow"><span class="pl">.' + (r * 32) + '</span>';
+      for (var g = 0; g < 4; g++) {
+        html += '<div class="pgrp">';
+        for (var k = 0; k < 8; k++) html += port(r * 32 + g * 8 + k);
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+    flushGap(255);
     box.innerHTML = html;
-    $('map-hint').textContent = sub + ' · ' + used + ' in use';
+    $('map-hint').textContent = sub + ', ' + used + ' lit' + (conflicts ? ', ' + conflicts + ' shared' : '');
     var tip = $('tip-map');
-    box.onmousemove = function (e) {
-      var c = e.target.closest('i'); if (!c) { tip.style.display = 'none'; return; }
+    function show(c) {
       var i = +c.dataset.i, ds = by[i] || [], r = box.getBoundingClientRect(), cr = c.getBoundingClientRect();
-      tip.style.display = 'block'; tip.style.left = (cr.left - r.left + cr.width / 2) + 'px'; tip.style.top = (cr.top - r.top - 6) + 'px';
+      tip.style.display = 'block'; tip.style.left = Math.min(Math.max(cr.left - r.left + cr.width / 2, 90), r.width - 90) + 'px'; tip.style.top = (cr.top - r.top - 6) + 'px';
       tip.innerHTML = '<b>.' + i + '</b> ' + (ds.length ? ds.map(function (d) { return esc(displayName(d)) + (d.online_now ? '' : ' (offline)'); }).join(', ') : 'free');
-    };
-    box.onmouseleave = function () { tip.style.display = 'none'; };
-    box.onclick = function (e) {
-      var c = e.target.closest('i'); if (!c || !(by[+c.dataset.i] || []).length) return;
+    }
+    function open(c) {
+      if (!c || !(by[+c.dataset.i] || []).length) return;
       $('q').value = state.q = m[1] + '.' + c.dataset.i; state.type = 'All'; setShow('all'); renderChips();
       by[+c.dataset.i].forEach(function (d) { state.open[d.mac] = true; }); renderRows();
-      $('tbl').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    };
+      $('toolbar').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    box.onmousemove = function (e) { var c = e.target.closest('.port'); if (!c) { tip.style.display = 'none'; return; } show(c); };
+    box.onmouseleave = function () { tip.style.display = 'none'; };
+    box.onclick = function (e) { open(e.target.closest('.port')); };
+    box.onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(e.target.closest('.port')); } };
+    box.onfocusin = function (e) { var c = e.target.closest('.port'); if (c) show(c); };
+    box.onfocusout = function () { tip.style.display = 'none'; };
   }
 
   // ---- first-time devices per day (columns)
@@ -570,6 +638,7 @@
   }
   function tags(d) {
     var t = '';
+    if (d.confidence === 'curated') t += '<span class="tape" title="labelled by hand">labelled</span>';
     if (isNew(d)) t += '<span class="tag new">new</span>';
     if (d.ip_conflict) t += '<span class="tag crit">IP conflict</span>';
     if (d.conflict) t += '<span class="tag warn">evidence disagrees</span>';
@@ -587,7 +656,7 @@
     function row(k, v) { return v ? '<dt>' + k + '</dt><dd>' + v + '</dd>' : ''; }
     var u = d.upnp || {}, hist = (d.ip_history || []).slice(0, 5).map(function (h) { return esc(h.ip) + ' until ' + esc(fmt(h.until)); }).join('\n');
     var aliases = (d.aliases || []).map(function (m) { return '<button type="button" class="linkbtn mono" data-mac="' + esc(m) + '">' + esc(m) + '</button>'; }).join('<br>');
-    var ports = d.ports.map(function (p) { return '<span class="port"><b>' + p.port + '</b>/' + esc(p.proto) + ' ' + esc(p.service || '') + (p.product ? ' <span class="muted">' + esc(p.product) + '</span>' : '') + '</span>'; }).join('');
+    var ports = d.ports.map(function (p) { return '<span class="pt"><b>' + p.port + '</b>/' + esc(p.proto) + ' ' + esc(p.service || '') + (p.product ? ' <span class="muted">' + esc(p.product) + '</span>' : '') + '</span>'; }).join('');
     var research = d.research ? [[d.research.manufacturer, d.research.model, d.research.type].filter(Boolean).join(' · ') + (d.research.confidence ? '  [' + d.research.confidence + ', ' + (d.research.date || '').slice(0, 10) + ']' : ''), d.research.rationale].filter(Boolean).join('\n') : '';
     return '<div class="dgrid">' +
       '<div class="card dcard"><h3>Identity</h3><dl>' +
@@ -610,7 +679,7 @@
         row('Scanned', d.scan_at ? esc(fmt(d.scan_at) + ' (' + d.scan_kind + ')') : '<span class="muted">never — a quick look runs automatically while it is online</span>') +
       '</dl></div>' +
       '<div class="card dcard" style="grid-column:1/-1"><h3>Online, last 7 days</h3>' + strip(d, 168, 1000, 16).replace('width="1000"', 'width="100%" viewBox="0 0 1000 16" preserveAspectRatio="none"') +
-        (ports ? '<h3 style="margin-top:14px">Open ports</h3><div class="ports">' + ports + '</div>' : '') +
+        (ports ? '<h3 style="margin-top:14px">Open ports</h3><div class="ports-open">' + ports + '</div>' : '') +
         ((d.mdns.length || u.friendlyName || (d.web || []).length) ? '<h3 style="margin-top:14px">Announces</h3><dl>' +
           row('mDNS', esc(d.mdns.join('\n'))) + row('UPnP', esc([u.friendlyName, [u.manufacturer, u.modelName, u.modelNumber].filter(Boolean).join(' '), u.server].filter(Boolean).join('\n'))) + row('Web', esc((d.web || []).join('\n'))) + '</dl>' : '') +
       '</div></div>';
@@ -629,12 +698,16 @@
         '<td class="hide-sm muted" style="white-space:nowrap" title="' + esc(fmt(d.last_seen)) + '">' + (d.online_now ? 'now' : ago(seen == null ? null : now - seen)) + '</td></tr>';
       if (state.open[d.mac]) html += '<tr class="detail"><td colspan="6">' + detail(d) + '</td></tr>';
     });
-    tb.innerHTML = html || '<tr><td colspan="6" class="empty">No devices match.</td></tr>';
+    tb.innerHTML = html || '<tr><td colspan="6" class="empty">No devices match. <button type="button" class="linkbtn" id="clear-all">Clear the search and filters</button></td></tr>';
+    var total = state.data.devices.length;
+    $('count').textContent = rows.length === total ? total + ' devices' : 'Showing ' + rows.length + ' of ' + total;
+    syncURL();
     document.querySelectorAll('th[data-k]').forEach(function (th) {
       if (th.dataset.k === state.sort) th.setAttribute('aria-sort', state.desc ? 'descending' : 'ascending'); else th.removeAttribute('aria-sort');
     });
   }
   $('rows').addEventListener('click', function (e) {
+    if (e.target.id === 'clear-all') { clearAll(); return; }
     var a = e.target.closest('.linkbtn');
     if (a) { state.open[a.dataset.mac] = true; $('q').value = state.q = ''; state.type = 'All'; setShow('all'); renderChips();
       var r = document.querySelector('tr.row[data-mac="' + a.dataset.mac + '"]'); if (r) r.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
@@ -648,6 +721,17 @@
       var again = document.querySelector('tr.row[data-mac="' + tr.dataset.mac + '"]'); if (again) again.focus(); }
   });
 
+  // Search, type and filter live in the URL, so a filtered view can be
+  // bookmarked or shared (the router Clients page already links ?q=).
+  function syncURL() {
+    var p = new URLSearchParams();
+    if (state.q) p.set('q', state.q);
+    if (state.type !== 'All') p.set('type', state.type);
+    if (state.show !== 'all') p.set('show', state.show);
+    var u = p.toString() ? '?' + p.toString() : location.pathname;
+    if (u !== location.search && !(u === location.pathname && !location.search)) history.replaceState(null, '', u);
+  }
+  function clearAll() { $('q').value = state.q = ''; state.type = 'All'; setShow('all'); renderChips(); }
   function render() { renderKpis(); renderOnline(); renderTypes(); renderSegs(); renderMap(); renderNew(); renderChips(); renderRows(); }
 
   function init(res) {
@@ -662,8 +746,19 @@
   }
 
   $('q').addEventListener('input', function (e) { state.q = e.target.value; renderRows(); });
-  var preset = new URLSearchParams(location.search).get('q');   // ?q=<ip|mac> (the router Clients page links here with it)
-  if (preset) { $('q').value = preset; state.q = preset; }
+  var qs = new URLSearchParams(location.search);   // ?q=<ip|mac> (the router Clients page links here with it), &type=, &show=
+  if (qs.get('q')) { $('q').value = qs.get('q'); state.q = qs.get('q'); }
+  if (qs.get('type')) state.type = qs.get('type');
+  if (/^(online|attention|new)$/.test(qs.get('show') || '')) { state.show = qs.get('show');
+    $('show').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.s === state.show)); }); }
+  // "/" jumps to search from anywhere; Esc in the box clears it.
+  document.addEventListener('keydown', function (e) {
+    if (e.key === '/' && !e.ctrlKey && !e.metaKey && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) { e.preventDefault(); $('q').focus(); $('q').select(); }
+  });
+  $('q').addEventListener('keydown', function (e) { if (e.key === 'Escape' && $('q').value) { e.preventDefault(); $('q').value = state.q = ''; renderRows(); } });
+  // The table header sticks just under the toolbar, whose height changes as it wraps.
+  function tbHeight() { document.documentElement.style.setProperty('--tb-h', $('toolbar').offsetHeight + 'px'); }
+  tbHeight(); window.addEventListener('resize', tbHeight);
   document.querySelectorAll('th[data-k]').forEach(function (th) {
     th.addEventListener('click', function () { var k = th.dataset.k; state.desc = state.sort === k ? !state.desc : false; state.sort = k; renderRows(); });
   });

@@ -4,8 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Logs · LAN Console</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="panel.css">
 <link rel="stylesheet" href="nav.css">
 <link rel="stylesheet" href="console.css">
 <style>
@@ -18,12 +17,12 @@
   table.data td.what details summary { cursor: pointer; list-style: none; }
   table.data td.what details summary::-webkit-details-marker { display: none; }
   table.data td.what pre { margin: 8px 0 0; padding: 8px 10px; background: var(--soft); border-radius: 6px;
-                           font: 12px/1.45 "IBM Plex Mono", ui-monospace, monospace; white-space: pre-wrap; word-break: break-all; }
+                           font: 12px/1.45 var(--font-mono); white-space: pre-wrap; word-break: break-all; }
   tr.bad td.what summary { color: var(--bad); }
   tr.ok td.what summary { color: var(--ok); }
   .day td { background: var(--soft); font-size: 13px; font-weight: 600; color: var(--fg2); }
   pre.journal { margin: 0; padding: 12px; background: var(--soft); border-radius: 8px; max-height: 70vh; overflow: auto;
-                font: 12px/1.5 "IBM Plex Mono", ui-monospace, monospace; white-space: pre-wrap; word-break: break-word; }
+                font: 12px/1.5 var(--font-mono); white-space: pre-wrap; word-break: break-word; }
   .foot { margin-top: 12px; font-size: 13px; color: var(--mut); }
 </style>
 </head>

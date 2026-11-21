@@ -1,29 +1,34 @@
-/* Top bar shared by every page (Devices, Router, Ping). Self-contained tokens so the
-   Devices page can keep its own stylesheet and still pick this up. */
+/* Top bar shared by every page — the rack's top rail: a dark band in both
+   themes, so the pages below read as faceplates mounted under it.
+   Tokens come from panel.css. */
 .topbar {
-  --nv-bg: #ffffff; --nv-line: #dde2e8; --nv-fg: #15191e; --nv-mut: #5b6573;
-  --nv-acc: #1f5bd8; --nv-acc-soft: #e8effc;
+  --nv-bg: #16191c; --nv-line: #000; --nv-fg: #f1f3f5; --nv-mut: #a2acb6; --nv-acc: #7fd0e6;
   background: var(--nv-bg); border-bottom: 1px solid var(--nv-line); color: var(--nv-fg);
-  font: 15px/1.45 "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  box-shadow: inset 0 -3px 0 #23282d;
+  font: 15px/1.45 var(--font, system-ui, sans-serif);
 }
-@media (prefers-color-scheme: dark) {
-  .topbar { --nv-bg: #1a1e24; --nv-line: #2b313a; --nv-fg: #e8ebef; --nv-mut: #a3adbd;
-            --nv-acc: #7aa2ff; --nv-acc-soft: #1f2b46; }
-}
-.topbar .tb-in { max-width: 1200px; margin: 0 auto; padding: 8px 16px; min-height: 60px; box-sizing: border-box;
-                 display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; }
-.topbar .tb-brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16px;
+@media (prefers-color-scheme: dark) { .topbar { --nv-bg: #0b0c0e; } }
+.topbar .tb-in { max-width: 1240px; margin: 0 auto; padding: 0 16px; min-height: 54px; box-sizing: border-box;
+                 display: flex; flex-wrap: wrap; align-items: stretch; gap: 0 28px; }
+.topbar .tb-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; letter-spacing: .01em;
                     color: inherit; text-decoration: none; }
 .topbar .tb-brand svg { stroke: var(--nv-acc); }
-.topbar nav { display: flex; flex-wrap: wrap; gap: 4px; }
-.topbar nav a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border-radius: 8px;
-                color: var(--nv-mut); text-decoration: none; font-size: 15px; }
-.topbar nav a:hover { color: var(--nv-fg); background: var(--nv-acc-soft); }
-.topbar nav a[aria-current=page] { color: var(--nv-fg); background: var(--nv-acc-soft); font-weight: 600; }
-.topbar nav a:focus-visible, .topbar button:focus-visible { outline: 2px solid var(--nv-acc); outline-offset: 2px; }
+.topbar nav { display: flex; flex-wrap: wrap; gap: 0; align-items: stretch; }
+.topbar nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 3px 14px 0;
+                color: var(--nv-mut); text-decoration: none; font-size: 15px; border-bottom: 3px solid transparent; }
+.topbar nav a:hover { color: var(--nv-fg); }
+.topbar nav a[aria-current=page] { color: var(--nv-fg); font-weight: 600; border-bottom-color: var(--nv-acc); }
+.topbar nav a:focus-visible, .topbar button:focus-visible { outline: 2px solid var(--nv-acc); outline-offset: -2px; }
 .topbar .tb-side { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
-                   font-size: 13px; color: var(--nv-mut); }
-.topbar .tb-side button { min-height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--nv-line);
-                          background: var(--nv-bg); color: var(--nv-fg); font: inherit; cursor: pointer; }
+                   font-size: 13px; color: var(--nv-mut); padding: 8px 0; }
+.topbar .tb-side button { min-height: 34px; padding: 0 14px; border-radius: 4px; border: 1px solid #3a4148;
+                          background: #22272c; color: var(--nv-fg); font: inherit; cursor: pointer; }
+.topbar .tb-side button:hover { border-color: var(--nv-acc); }
 .topbar .tb-side button:disabled { opacity: .6; cursor: progress; }
-@media (max-width: 640px) { .topbar .tb-side { margin-left: 0; width: 100%; } }
+@media (max-width: 640px) {
+  .topbar .tb-in { gap: 0 12px; }
+  .topbar .tb-brand { min-height: 44px; }
+  .topbar nav { width: 100%; }
+  .topbar nav a { flex: 1; justify-content: center; padding: 3px 6px 0; }
+  .topbar .tb-side { margin-left: 0; width: 100%; padding-top: 0; }
+}
