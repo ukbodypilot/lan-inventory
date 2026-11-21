@@ -4,6 +4,10 @@ The version is the git tag. Releases before 2.0.0 were never tagged.
 
 ## Unreleased
 
+## 2.1.0 - 2026-11-21
+
+Device names are checked instead of trusted, and the web pages get a new look with the device list first.
+
 - **New look: "patch panel".** The web pages borrow from the network closet: rack-steel background, faceplate
   panels and a dark top rail, with the port LEDs as the only bright colours (green online, amber needs attention,
   red conflict, grey offline). A hand-labelled device wears a strip of label-maker tape. Light and dark themes.
