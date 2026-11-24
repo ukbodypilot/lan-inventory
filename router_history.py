@@ -143,6 +143,47 @@ def last(metric, key="", path=DB):
     return tuple(row) if row else None
 
 
+# The Deco reports only instantaneous rates (client_list_speed), never byte counters, so usage is an
+# estimate: each sample's rate is held until the next sample, capped at USAGE_MAX_GAP so a collector
+# outage is counted as "no data" rather than hours of whatever rate was last seen. Bursts that fall
+# between two 5-minute samples are missed, so treat the numbers as a ranking, not a bill.
+SPEED_UNIT_BYTES = 1000   # bytes per reported unit; assumed kB/s (unconfirmed, see LC.UNIT in console.js)
+USAGE_MAX_GAP = 600       # s; a gap longer than this between samples counts only this long
+
+
+def usage(since=7 * 86400, bucket=86400, key=None, path=DB, now=None, tz_offset=None):
+    """Estimated bytes per client per bucket, from client_down/client_up.
+    Returns {mac: [[bucket_start, down_bytes, up_bytes, covered_s], ...]} oldest first.
+    Buckets align to local midnight when bucket is a whole number of days (tz_offset in s east of UTC,
+    default: this machine's current offset)."""
+    if not os.path.exists(path):
+        return {}
+    now = int(now or time.time())
+    if tz_offset is None:
+        tz_offset = -time.altzone if time.localtime(now).tm_isdst > 0 else -time.timezone
+    bucket = max(300, int(bucket))
+    off = tz_offset if bucket % 86400 == 0 else 0
+    start = ((now - int(since) + off) // bucket) * bucket - off
+    con = _db(path)
+    q = ("SELECT metric, key, ts, value, LEAD(ts) OVER (PARTITION BY metric, key ORDER BY ts) FROM samples "
+         "WHERE metric IN ('client_down', 'client_up') AND ts >= ?" + (" AND key = ?" if key is not None else ""))
+    args = [start] + ([key] if key is not None else [])
+    acc = {}
+    for metric, k, ts, value, nxt in con.execute(q, args):
+        dt = min((nxt if nxt is not None else now) - ts, USAGE_MAX_GAP)
+        if dt <= 0:
+            continue
+        b = ((ts + off) // bucket) * bucket - off
+        row = acc.setdefault(k, {}).setdefault(b, [b, 0.0, 0.0, 0])
+        if metric == "client_down":
+            row[1] += value * SPEED_UNIT_BYTES * dt
+            row[3] += dt
+        else:
+            row[2] += value * SPEED_UNIT_BYTES * dt
+    con.close()
+    return {k: [[b, int(r[1]), int(r[2]), r[3]] for b, r in sorted(v.items())] for k, v in acc.items()}
+
+
 def series(metric, key=None, since=86400, points=48, path=DB):
     """Bucket-averaged series, oldest first: {key: [[ts, value], ...]}.
     `key` None returns every key for the metric (used by the clients page's sparklines)."""

@@ -246,6 +246,7 @@
   </div>
 </main>
 
+<script src="bandwidth.js"></script>
 <script>
 (function () {
   'use strict';
@@ -682,7 +683,9 @@
         (ports ? '<h3 style="margin-top:14px">Open ports</h3><div class="ports-open">' + ports + '</div>' : '') +
         ((d.mdns.length || u.friendlyName || (d.web || []).length) ? '<h3 style="margin-top:14px">Announces</h3><dl>' +
           row('mDNS', esc(d.mdns.join('\n'))) + row('UPnP', esc([u.friendlyName, [u.manufacturer, u.modelName, u.modelNumber].filter(Boolean).join(' '), u.server].filter(Boolean).join('\n'))) + row('Web', esc((d.web || []).join('\n'))) + '</dl>' : '') +
-      '</div></div>';
+      '</div>' +
+      (window.BW && d.mac ? '<div class="card dcard" style="grid-column:1/-1" data-bw="' + esc(d.mac) + '"></div>' : '') +
+      '</div>';
   }
   function renderRows() {
     var tb = $('rows'), rows = visible(), now = nowSec(), html = '';
@@ -701,6 +704,7 @@
     tb.innerHTML = html || '<tr><td colspan="6" class="empty">No devices match. <button type="button" class="linkbtn" id="clear-all">Clear the search and filters</button></td></tr>';
     var total = state.data.devices.length;
     $('count').textContent = rows.length === total ? total + ' devices' : 'Showing ' + rows.length + ' of ' + total;
+    if (window.BW) BW.fill(tb);
     syncURL();
     document.querySelectorAll('th[data-k]').forEach(function (th) {
       if (th.dataset.k === state.sort) th.setAttribute('aria-sort', state.desc ? 'descending' : 'ascending'); else th.removeAttribute('aria-sort');

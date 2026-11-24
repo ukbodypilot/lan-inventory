@@ -120,6 +120,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self._api_read(self.path[len("/api/read/"):])
         if self.path.startswith("/api/history"):
             return self._api_history()
+        if self.path.startswith("/api/usage"):
+            return self._api_usage()
         if self.path.startswith("/api/ping"):
             return self._api_ping()
         if self.path.startswith("/api/busy"):
@@ -171,6 +173,22 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self._send_json(400, {"ok": False, "error": f"bad query: {exc}"})
         try:
             self._send_json(200, {"ok": True, "series": router_history.series(metric, key, since, points)})
+        except Exception as exc:  # noqa: BLE001
+            self._send_json(500, {"ok": False, "error": str(exc)})
+
+    def _api_usage(self):
+        """Estimated bytes per client per day (router_history.usage): ?since=s&key=mac&bucket=s"""
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        try:
+            key = q.get("key", [None])[0]
+            since = min(int(q.get("since", ["604800"])[0]), router_history.RETENTION_DAYS * 86400)
+            bucket = max(3600, int(q.get("bucket", ["86400"])[0]))
+        except ValueError as exc:
+            return self._send_json(400, {"ok": False, "error": f"bad query: {exc}"})
+        try:
+            self._send_json(200, {"ok": True, "bucket": bucket, "unit_bytes": router_history.SPEED_UNIT_BYTES,
+                                  "max_gap": router_history.USAGE_MAX_GAP,
+                                  "usage": router_history.usage(since, bucket, key and key.lower())})
         except Exception as exc:  # noqa: BLE001
             self._send_json(500, {"ok": False, "error": str(exc)})
 
