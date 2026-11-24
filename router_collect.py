@@ -210,7 +210,8 @@ def main():
         try:
             report["reads"] = deco_web.snapshot(cfg["DECO_HOST"], cfg.get("DECO_WEBPW") or password,
                                                  gap=_float(cfg["WEB_READ_GAP"], 1.5), node_ttl=_float(cfg["WEB_NODE_MAP_TTL"], 21600),
-                                                 probes=int(_float(cfg["WEB_NODE_PROBES"], 2)))
+                                                 probes=int(_float(cfg["WEB_NODE_PROBES"], 2)),
+                                                 extra=not scheduled)  # hourly full run: also the TMP stand-ins
             report["source"] = "web"
             report["scheduled"] = scheduled
             report["web_login"] = deco_web.LAST.get("login")

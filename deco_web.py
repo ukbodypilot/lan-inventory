@@ -239,7 +239,15 @@ def _load_node_map():
         return 0, {}, set(), 0
 
 
-def snapshot(host: str, password: str, gap: float = 1.5, node_ttl: float = 21600, probes: int = 2) -> dict:
+# Extra web reads standing in for TMP-only sections, run on full-read runs only (hourly) when TMP is down.
+# TMP read name -> (web path, params or None, transform(result) -> what the TMP read would have returned).
+# Only endpoints confirmed by deco_web_discover.py probe (state/deco_web_catalog.json) belong here, and a
+# transform must produce the TMP read's shape, because the pages read that shape.
+EXTRA_READS = {}
+
+
+def snapshot(host: str, password: str, gap: float = 1.5, node_ttl: float = 21600, probes: int = 2,
+             extra: bool = False) -> dict:
     """Read what the web interface offers and reshape it into the TMP read names the pages and
     router_history already understand (device_list, client_list, client_list_speed,
     wan_lan_status, device_resource_info). Each read is recorded separately, like deco_tmp."""
@@ -338,6 +346,15 @@ def snapshot(host: str, password: str, gap: float = 1.5, node_ttl: float = 21600
                                                                   "percent_only": True}], "raw": p})
         except DecoWebError as exc:
             reads["device_resource_info"] = _err(exc)
+        for name, (path, params, fn) in (EXTRA_READS.items() if extra else ()):
+            try:
+                pace()
+                reads[name] = _ok(fn(web.read(path, params)))
+                reads[name]["source"] = "web"
+            except DecoWebError as exc:
+                reads[name] = _err(exc)
+            except Exception as exc:  # noqa: BLE001 - a transform that meets an unexpected shape
+                reads[name] = _err(f"{path}: transform: {exc}")
     # each read's time = since the one before (the first includes the login), like deco_tmp's "ms"
     prev = started
     for v in sorted(reads.values(), key=lambda v: v["_at"]):
