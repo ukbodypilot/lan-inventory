@@ -4,6 +4,10 @@ The version is the git tag. Releases before 2.0.0 were never tagged.
 
 ## Unreleased
 
+## 2.2.0 - 2026-11-24
+
+Per-device bandwidth history, and a web-only mode for Deco firmware that closes the TMP control port.
+
 - **Bandwidth per device.** Each device on the Devices page and in the Clients drawer gets a 7-day download/upload
   chart and an estimated data-per-day table; Clients gets a sortable "Data · 24h" column. The Deco reports only
   speeds at each 5-minute read, never byte counts, so totals hold each speed until the next read (gaps over
