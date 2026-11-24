@@ -89,6 +89,8 @@
               fullGenerated: d.full_generated ? new Date(d.full_generated) : (d.source === 'web' ? null : new Date(d.generated)),
               fullError: d.full_error || null };
     m.stale = function (name) { var r = (d.reads || {})[name]; return !!(r && r.stale); };
+    // port 20001 (TMP) as router_collect last saw it; every write and live read goes through it
+    m.tmpDown = d.tmp_port && d.tmp_port.up === false ? { since: new Date(d.tmp_port.since * 1000) } : null;
 
     // nodes
     var speeds = {};
@@ -214,6 +216,27 @@
     var q = 'api/history?metric=' + encodeURIComponent(metric) + '&since=' + since + '&points=' + (points || 48) +
       (key != null ? '&key=' + encodeURIComponent(key) : '');
     return LC.api(q).then(function (j) { return j.series || {}; });
+  };
+
+  // ---------------------------------------------------------------- port 20001 closed
+  LC.TMP_DOWN_NOTE = 'Needs the router\u2019s control port (20001), which has refused connections since ';
+  LC.fmtDay = function (d) { return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + LC.fmtTime(d); };
+  // Disable every control under root that needs TMP (writes, live reads) while the port is closed.
+  // noteBefore: element to put the explanation in front of (default: root's first child)
+  LC.lockWrites = function (root, m, noteBefore) {
+    if (!root || !m || !m.tmpDown) return;
+    var why = LC.TMP_DOWN_NOTE + LC.fmtDay(m.tmpDown.since) + '. The web interface has no way to change settings.';
+    Array.prototype.forEach.call(root.querySelectorAll(
+      'button[data-act],button[data-toggle],button[data-review],button[data-remove],button[data-addgo],button[data-live]'), function (b) {
+      b.disabled = true; b.title = why; b.setAttribute('aria-disabled', 'true');
+    });
+    Array.prototype.forEach.call(root.querySelectorAll('input[data-name],input[data-add],textarea[data-json],textarea[data-addjson]'),
+      function (i) { i.readOnly = true; });
+    if (!root.querySelector('.tmpnote')) {
+      var p = document.createElement('p'); p.className = 'note tmpnote'; p.textContent = 'Changes are switched off. ' + why;
+      var at = noteBefore || root.firstChild;
+      at.parentNode.insertBefore(p, at);
+    }
   };
 
   // ---------------------------------------------------------------- drawing

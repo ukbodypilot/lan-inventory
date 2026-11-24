@@ -4,6 +4,19 @@ The version is the git tag. Releases before 2.0.0 were never tagged.
 
 ## Unreleased
 
+- **Bandwidth per device.** Each device on the Devices page and in the Clients drawer gets a 7-day download/upload
+  chart and an estimated data-per-day table; Clients gets a sortable "Data · 24h" column. The Deco reports only
+  speeds at each 5-minute read, never byte counts, so totals hold each speed until the next read (gaps over
+  10 min count as 10 min) and miss bursts between reads. `/api/usage` serves them. The unit is still assumed kB/s.
+- **Living without port 20001.** Some Deco firmware (seen on an X55 with 1.11.1) refuses every connection to the
+  TMP control port. `deco_web_discover.py` maps what the admin web interface offers instead (it follows the
+  page's own module registry, then sends one paced read per endpoint, with secrets redacted); IPv6 and Wi-Fi band
+  settings are now read from it on the hourly run when TMP is down. Reservations, DHCP leases, port forwarding,
+  per-client signal, node speeds and all writes have no web equivalent.
+- While the port is closed the collector makes no TMP logins (one bare connect per run notices it coming back),
+  the Settings page and Clients drawer switch off every change with the reason, and sections frozen from before
+  the port closed are labelled with their date. `router.json` carries `tmp_port`.
+
 ## 2.1.0 - 2026-11-21
 
 Device names are checked instead of trusted, and the web pages get a new look with the device list first.

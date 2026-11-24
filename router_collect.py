@@ -91,6 +91,16 @@ def _speed_read(cfg, log):
         if until > time.time():
             log["speed"] = f"backing off until {time.strftime('%H:%M', time.localtime(until))}"
         return None
+    try:
+        with open(PORT_STATE) as f:
+            port_up = json.load(f).get("up", True)
+    except (OSError, ValueError):
+        port_up = True
+    if not port_up:
+        # closed since firmware 1.11.1 (2026-11-18): no login attempts, just the caller's plain probe,
+        # which flips PORT_STATE back to up -- and the next run reads speeds again -- if the port returns
+        log["speed"] = "port 20001 closed, probe only"
+        return None
     t0 = time.monotonic()
     try:
         with deco_tmp.DecoClient(cfg["DECO_HOST"], cfg["DECO_EMAIL"], cfg["DECO_ACCTPW"]) as deco:
@@ -278,6 +288,11 @@ def main():
         pass
     tmp = OUT + ".tmp"
     with open(tmp, "w") as f:
+        try:
+            with open(PORT_STATE) as pf:
+                report["tmp_port"] = json.load(pf)  # the pages switch off writes while it is down
+        except (OSError, ValueError):
+            pass
         json.dump(report, f, indent=2)
     os.replace(tmp, OUT)
     return 0

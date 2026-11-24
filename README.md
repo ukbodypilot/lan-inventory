@@ -145,6 +145,17 @@ request per node, so each run re-asks only `WEB_NODE_PROBES` nodes (default 2, r
 shows up at most that late) and the whole map (`state/deco_web_nodes.json`) is rebuilt every `WEB_NODE_MAP_TTL` s (6 h) or for a new client.
 Only a refused connection counts as port 20001 down; a timeout logs `speed_slow` and changes nothing.
 
+**When port 20001 is closed for good.** On an X55, firmware 1.11.1 refused every connection to 20001
+from the moment it installed, through reboots. The web interface is then the only path, and it is a
+small one: `deco_web_discover.py` maps it (`ui` follows the admin page's own module registry, `probe`
+sends one paced read to each endpoint; results in `state/`), and on that firmware it has no IP
+reservations, DHCP leases, port forwarding, per-client signal or node speeds, and no writes at all.
+What it does have and matches a TMP section is read on the hourly run (`deco_web.EXTRA_READS`: IPv6,
+Wi-Fi bands, passwords scrubbed). While the port is down the collector makes no TMP logins, only the
+one bare connect per run; the pages switch off every change and live-read control with the reason, and
+label sections frozen from before the port closed with their date. When the probe sees the port answer
+again, all of it comes back by itself on the next run.
+
 ## Ping
 
 `ping.html`: continuous traceroute, a Linux port of the Windows "pingtrace" tool. `ping_collect.py`

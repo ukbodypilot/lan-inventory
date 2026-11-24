@@ -192,3 +192,6 @@ dialog.rvdlg .review { box-shadow: 0 10px 40px rgba(0,0,0,.25); }
 .busybar .bb-fill { height: 4px; width: 0; background: var(--warn); transition: width 1.8s linear; }
 .busybar.done .bb-fill { background: var(--ok); }
 body.router-busy :is(#refresh, .toggle, .review [data-a=apply], [data-act], [data-live], [data-remove], [data-addgo], [data-review]) { opacity: .5; cursor: not-allowed; }
+/* controls switched off while port 20001 is closed (LC.lockWrites) */
+.btn:disabled, .toggle:disabled { opacity: .45; cursor: not-allowed; }
+.note.tmpnote { color: var(--amber-text); }

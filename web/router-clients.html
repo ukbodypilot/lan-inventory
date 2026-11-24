@@ -202,6 +202,7 @@
         '<button type="button" class="btn" disabled title="No speed-limit write opcode is known yet">Limit speed <span class="badge">not available</span></button>' +
       '</div><p class="note">Anything not verified opens a confirm step, then shows what the router reports afterwards.</p>';
     BW.fill($('drawer'));
+    LC.lockWrites($('drawer'), model, $('drawer').querySelector('.actions'));
   }
 
   function act(kind) {

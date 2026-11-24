@@ -124,6 +124,7 @@
       return names.length ? '<h2 class="grp">' + g[1] + '</h2>' + names.map(card).join('') : '';
     }).join('');
     $('col').innerHTML = html;
+    LC.lockWrites($('col'), model);
   }
 
   function card(name) {
@@ -135,10 +136,12 @@
       head += '<button type="button" class="toggle" data-name="' + name + '" data-toggle="' + ui.toggle + '" aria-pressed="' + !!v[ui.toggle] + '" aria-label="' + esc(ui.title) + '"></button>';
     head += '</div></div>';
     if (v == null) {
-      return '<section class="card set" id="set-' + name + '">' + head + '<p class="desc">Not read yet. Use Refresh now for a full read, or read just this one.</p>' +
+      return '<section class="card set" id="set-' + name + '">' + head + '<p class="desc">' + (model.tmpDown ? 'Never read before the control port closed, and the web interface does not offer it.' : 'Not read yet. Use Refresh now for a full read, or read just this one.') + '</p>' +
         '<div class="acts"><button type="button" class="btn" data-live="' + name + '">Read it from the router</button></div></section>';
     }
-    var asOf = model.stale(name) && !live[name] && model.fullGenerated ? ' <span class="mut small">(as of the full read at ' + LC.fmtTime(model.fullGenerated) + ')</span>' : '';
+    var asOf = !(model.stale(name) && !live[name] && model.fullGenerated) ? '' : model.tmpDown && model.fullGenerated < model.tmpDown.since
+      ? ' <span class="small" style="color:var(--amber-text)">(last read ' + esc(LC.fmtDay(model.fullGenerated)) + ', before the control port closed; it cannot be refreshed over the web interface)</span>'
+      : ' <span class="mut small">(as of the full read at ' + LC.fmtTime(model.fullGenerated) + ')</span>';
     var body = '<p class="desc">' + esc(ui.desc ? ui.desc(v) : '') + asOf + '</p>';
     if (s.kind === 'list') body = listBody(name, s, ui, v);
     else if (!noop) {
