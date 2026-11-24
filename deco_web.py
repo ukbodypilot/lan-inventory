@@ -243,7 +243,42 @@ def _load_node_map():
 # TMP read name -> (web path, params or None, transform(result) -> what the TMP read would have returned).
 # Only endpoints confirmed by deco_web_discover.py probe (state/deco_web_catalog.json) belong here, and a
 # transform must produce the TMP read's shape, because the pages read that shape.
-EXTRA_READS = {}
+SECRET_FIELDS = ("password", "psk")  # same marker as deco_tmp.redact, so the pages treat both alike
+
+
+def _scrub(obj):
+    if isinstance(obj, dict):
+        return {k: ("***REDACTED***" if k in SECRET_FIELDS else _scrub(v)) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_scrub(v) for v in obj]
+    return obj
+
+
+def _wlan_to_bands(w):
+    """admin/wireless?form=wlan -> the TMP wifi_bands_info shape (per band: host, radio, backhaul, guest, iot).
+    The web read puts the IoT network once at the top with enable_2g/enable_5g; TMP repeats it per band."""
+    iot = (w.get("iot") or {}).get("host") or {}
+    out = {}
+    for band, v in w.items():
+        if not band.startswith("band") or not isinstance(v, dict):
+            continue
+        host = dict(v.get("host") or {})
+        radio = {"enable": host.get("enable"), "channel": str(host.pop("channel", "")),
+                 "hwmode": host.pop("mode", None), "htmode": host.pop("channel_width", None)}
+        b = {"host": host, "radio": radio, "backhaul": v.get("backhaul") or {}, "guest": v.get("guest") or {}}
+        if iot:
+            b["iot"] = dict(iot, enable=bool(iot.get("enable") and iot.get("enable_2g" if band == "band2_4" else "enable_5g")))
+            b["iot"].pop("enable_2g", None)
+            b["iot"].pop("enable_5g", None)
+        out[band] = b
+    return out
+
+
+EXTRA_READS = {
+    # confirmed 2026-11-24 on an X55, firmware 1.11.1 (deco_web_discover.py probe)
+    "ipv6": ("admin/network?form=ipv6", {"device_mac": "default"}, lambda r: {"enable_ipv6": r.get("enable_ipv6")}),
+    "wifi_bands_info": ("admin/wireless?form=wlan", None, _wlan_to_bands),
+}
 
 
 def snapshot(host: str, password: str, gap: float = 1.5, node_ttl: float = 21600, probes: int = 2,
@@ -349,7 +384,7 @@ def snapshot(host: str, password: str, gap: float = 1.5, node_ttl: float = 21600
         for name, (path, params, fn) in (EXTRA_READS.items() if extra else ()):
             try:
                 pace()
-                reads[name] = _ok(fn(web.read(path, params)))
+                reads[name] = _ok(_scrub(fn(web.read(path, params))))
                 reads[name]["source"] = "web"
             except DecoWebError as exc:
                 reads[name] = _err(exc)

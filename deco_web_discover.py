@@ -31,13 +31,17 @@ import router_config
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 UI_OUT = os.path.join(ROOT, "state", "deco_web_ui_endpoints.json")
+UI_DIR = os.path.join(ROOT, "state", "deco_web_ui")  # copies of the fetched files, to read offline
 CATALOG = os.path.join(ROOT, "state", "deco_web_catalog.json")
 LOCK = os.path.join(ROOT, "state", "router_collect.lock")
 
 UI_GAP = 1.0            # s between static file fetches
-UI_MAX_FILES = 60
+UI_MAX_FILES = 400
 PROBE_GAP = 5.0         # s between probe reads
 MAX_FAILS_IN_A_ROW = 2
+# params the UI adds itself (its proxy writeFilter); without them these forms answer HTTP 500
+PROBE_PARAMS = {"admin/network?form=lan_ip": {"device_mac": "default"},
+                "admin/network?form=ipv6": {"device_mac": "default"}}
 # never "read" these even if the UI names them: they act rather than report, or end our session
 # matched as whole "_"-separated words of the form name, so "dhcp_setting" stays readable but "lan_set" does not
 SKIP_FORMS = re.compile(r"(^|_)(logout|reboot|reset|restore|upgrade|upload|factory|backup|login|keys|auth|password|"
@@ -60,9 +64,32 @@ def extract_scripts(text, base_url):
     host = urllib.parse.urlparse(base_url).netloc
     out = []
     for a, b in SCRIPT_RE.findall(text):
+        if not re.fullmatch(r"[A-Za-z0-9_./-]+\.js", a or b):  # skip code fragments that happen to end in .js
+            continue
         u = urllib.parse.urljoin(base_url, a or b)
         if urllib.parse.urlparse(u).netloc == host and u not in out:
             out.append(u)
+    return out
+
+
+def extract_configs(text):
+    """./config/<name>.json files a script loads (the module registry is one of them)."""
+    return sorted(set(re.findall(r"""["'](\./config/[A-Za-z0-9_]+\.json)["']""", text)))
+
+
+def module_files(registry):
+    """Every controller/view/model path in config/modules.json, in file order."""
+    out = []
+    def walk(v):
+        if isinstance(v, dict):
+            for x in v.values():
+                walk(x)
+        elif isinstance(v, list):
+            for x in v:
+                walk(x)
+        elif isinstance(v, str) and re.fullmatch(r"[A-Za-z0-9_./-]+\.(js|html|json)", v) and v not in out:
+            out.append(v)
+    walk(registry)
     return out
 
 
@@ -99,6 +126,7 @@ def _get(url, timeout=10):
 
 def ui(host):
     start = f"http://{host}/"
+    page = f"http://{host}/webpages/index.html"  # the single-page app: "./x" in any script is relative to this
     queue, seen, endpoints, files = [start], set(), {}, []
     while queue and len(seen) < UI_MAX_FILES:
         url = queue.pop(0)
@@ -112,13 +140,24 @@ def ui(host):
         except OSError as exc:
             files.append({"url": url, "error": str(exc)})
             continue
+        local = os.path.join(UI_DIR, urllib.parse.urlparse(final).path.lstrip("/") or "index")
+        os.makedirs(os.path.dirname(local), exist_ok=True)
+        with open(local, "w") as f:
+            f.write(text)
         found = extract_endpoints(text)
         files.append({"url": final, "bytes": len(text), "endpoints": len(found)})
         for e in found:
             endpoints.setdefault(e, url)
-        queue += [u for u in extract_scripts(text, final) if u not in seen]
+        base = page if final.endswith(".js") or final.endswith(".json") else final
+        queue += [u for u in extract_scripts(text, base) if u not in seen]
+        queue += [urllib.parse.urljoin(page, c) for c in extract_configs(text)]
+        if final.endswith("/modules.json"):
+            try:
+                queue += [urllib.parse.urljoin(page, m) for m in module_files(json.loads(text))]
+            except ValueError:
+                pass
         # the landing page may be a redirect stub pointing at the real UI page
-        for m in re.findall(r"""location(?:\.href)?\s*=\s*["']([^"']+)["']|url=([^"'>\s]+)""", text):
+        for m in re.findall(r"""location(?:\.href)?\s*=\s*["']([^"']+)["']|url=([^"'>\s]+)""", text, re.I):
             u = urllib.parse.urljoin(final, m[0] or m[1])
             if urllib.parse.urlparse(u).netloc == host and u not in seen:
                 queue.append(u)
@@ -152,7 +191,7 @@ def probe(host, password, only=None):
                     time.sleep(PROBE_GAP)
                 t0 = time.monotonic()
                 try:
-                    res = web.read(e)
+                    res = web.read(e, PROBE_PARAMS.get(e))
                     entry = {"ok": True, "shape": shape(res), "result": redact(res)}
                     fails = 0
                 except deco_web.SessionExpired as exc:

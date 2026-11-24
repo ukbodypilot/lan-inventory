@@ -23,6 +23,13 @@ class DiscoverTest(unittest.TestCase):
                    "admin/client?form=block_add", "admin/wireless?form=wps_start", "admin/lan?form=lan_set"):
             self.assertFalse(d.probe_worthy(no), no)
 
+    def test_module_registry(self):
+        reg = {"main": {"controller": "./modules/main/main.js", "view": "./modules/main/main.html"},
+               "x": {"controller": "./modules/main/main.js", "models": ["./modules/x/m.js"]}, "n": 3}
+        self.assertEqual(d.module_files(reg), ["./modules/main/main.js", "./modules/main/main.html", "./modules/x/m.js"])
+        self.assertEqual(d.extract_configs('c.ajax("./config/modules.json",{});c.ajax("./config/a_b.json")'),
+                         ["./config/a_b.json", "./config/modules.json"])
+
     def test_redact(self):
         r = d.redact({"ssid": "Home", "password": "x", "wps_pin": "1", "ping": 5, "port_mapping": [{"key": "k", "a": 1}]})
         self.assertEqual(r, {"ssid": "Home", "password": "<redacted>", "wps_pin": "<redacted>", "ping": 5,
