@@ -94,6 +94,42 @@ class Names(unittest.TestCase):
         for claims, man, model in ok:
             self.assertEqual(identify.name_check(claims, man, model, "macOS" if "Mac" in model else ""), [], claims)
 
+    def test_parts_maker_cannot_disprove_a_brand(self):
+        self.assertEqual(identify.name_check({"DHCP hostname": "Garage_iPhone"}, "Murata Manufacturing"), [])
+        self.assertIn("component", identify.ai_vendor("LG Innotek"))
+        self.assertEqual(identify.ai_vendor("Apple, Inc."), "Apple, Inc.")
+        f = identify.name_check({"AirPlay device name": "Den Apple TV"}, "Roku", "Roku Express 4K+ (3941X2)", "Roku OS")
+        self.assertTrue(f)  # a real brand maker still disproves it
+
+    def test_dock_name_is_a_shared_port_not_a_conflict(self):
+        notes = []
+        f = identify.name_check({"DHCP hostname": "1AB2CD3-Dell Pro Thunderbolt 4 Smart Dock", "mDNS hostname": "Kestrel"},
+                                "Dell Inc.", "", "", "", None, notes)
+        self.assertEqual(f, [])
+        self.assertTrue(any("dock/adapter" in n for n in notes))
+
+    def test_rename_over_time_is_not_a_conflict(self):
+        claims = {"DHCP hostname": "DESKTOP-RT5SKQL", "mDNS hostname": "DESKTOP-ZZ98YX7"}
+        notes = []
+        when = {"DHCP hostname": ("2026-01-05T03:20:00Z", "2026-01-05T03:24:00Z"), "mDNS hostname": (None, "2026-01-05T01:30:00Z")}
+        self.assertEqual(identify.name_check(claims, "", "", "Windows", "MSFT 5.0", when, notes), [])
+        self.assertTrue(any("renamed" in n and "ZZ98YX7" in n for n in notes))
+        when["mDNS hostname"] = (None, "2026-01-05T03:00:00Z")  # heard while the new name was in use: both at once
+        self.assertTrue(identify.name_check(claims, "", "", "Windows", "MSFT 5.0", when))
+
+    def test_dock_name_loses_the_display_name(self):
+        i = identify.Idn()
+        i.name_candidate("1AB2CD3-Dell Pro Thunderbolt 4 Smart Dock", "DHCP hostname", "dhcp", 50)
+        i.name_candidate("Kestrel", "mDNS hostname", "mdns", 45)
+        self.assertEqual(i.pick("name")[0], "Kestrel")
+
+    def test_nmap_os_guess_needs_a_tcp_port(self):
+        ev = {"ports": [{"port": 5353, "proto": "udp"}], "os": "Aerohive HiveOS 6.1",
+              "osclass": {"osfamily": "HiveOS", "accuracy": 97, "type": "WAP"}, "dhcp": {}, "vendor": "Liteon"}
+        self.assertNotEqual(identify.identify(ev)["os_family"], "HiveOS")
+        ev["ports"].append({"port": 22, "proto": "tcp"})
+        self.assertEqual(identify.identify(ev)["os_family"], "HiveOS")
+
 
 if __name__ == "__main__":
     unittest.main()

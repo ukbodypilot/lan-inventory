@@ -4,6 +4,15 @@ The version is the git tag. Releases before 2.0.0 were never tagged.
 
 ## Unreleased
 
+- **Fewer false name mismatches.** A MAC prefix from a parts or contract maker (LG Innotek, Murata, Pegatron…)
+  no longer disproves a brand name, and the AI name reading is told so. A dock's or USB adapter's own name is
+  treated as a shared network port: the docked device's name is shown and it is not a conflict. Two names that
+  were never in use at the same time are reported as a rename (the listener now keeps when each DHCP host name
+  was used, and when the mDNS host name was last heard). A device going back to a name it has used before is
+  no longer a "renamed" event (`state/name_history.json`).
+- nmap's OS guess is only used when the host has an open TCP port; a host answering only on UDP (mDNS) got
+  noise such as "Aerohive HiveOS".
+
 ## 2.2.0 - 2026-11-24
 
 Per-device bandwidth history, and a web-only mode for Deco firmware that closes the TMP control port.

@@ -115,6 +115,11 @@ def on_dhcp(pkt):
             r["types"].append(DHCP_MSG.get(mt))
         if "hostname" in opts:
             r["hostname"] = text(opts["hostname"][0])[:64]
+            # when each name was in use: a rename (old name stops, new one starts) is not two names at once
+            hn = r.setdefault("hostnames", {})
+            hn.setdefault(r["hostname"], [h["last_seen"], h["last_seen"]])[1] = h["last_seen"]
+            while len(hn) > 8:
+                del hn[min(hn, key=lambda k: hn[k][1])]
         if "vendor_class_id" in opts:
             r["vendor_class"] = text(opts["vendor_class_id"][0])[:64]
         if "param_req_list" in opts:

@@ -8,13 +8,14 @@ a device answering its own vendor API outweighs a host name, which outweighs the
 vendor. For each field the best-supported value wins, agreeing sources add to it, and a strong source that
 disagrees with the winner lowers the confidence and is named in the reasons. Rule order does not matter.
 """
+import datetime
 import hashlib
 import json
 import os
 import re
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = 5  # bump when rules change meaning: build_report drops identities cached under an older version
+VERSION = 7  # bump when rules change meaning: build_report drops identities cached under an older version
 
 # How far each kind of evidence can be trusted on its own (0-100).
 WEIGHT = {
@@ -244,6 +245,42 @@ NAME_CLAIMS = [(r"apple ?tv|iphone|ipad|macbook|imac|homepod", r"apple|ios|ipado
                (r"^(desktop|laptop)-[a-z0-9]{7}$", r"windows|microsoft|^$", "a Windows PC")]
 
 
+# Makers of radio modules and whole devices for other brands: the MAC prefix names them, not the brand on the box, so
+# they can never disprove a name's brand claim (a Tesla's Wi-Fi is an LG Innotek module).
+PARTS_MAKERS = re.compile(r"lg innotek|murata|azurewave|universal global|usi\b|hon hai|foxconn|pegatron|quanta|compal|"
+                          r"wistron|inventec|liteon|lite-on|espressif|realtek|mediatek|qualcomm|broadcom|cypress|"
+                          r"texas instruments|silicon labs|shenzhen|hui zhou|tuya|ampak|sercomm|askey|arcadyan|"
+                          r"gaoshengda|chongqing fugui|cloud network technology", re.I)
+# A dock's or USB adapter's own name: the port is shared with whatever is plugged into it, so a second name on the same
+# MAC is a second device, not a disguise ("1AB2CD3-Dell Pro Thunderbolt 4 Smart Dock" and the phone docked in it).
+ADAPTER_NAME = re.compile(r"\bdock\b|thunderbolt|usb[- ]?c?[- ]?(ethernet|lan|nic)|ethernet adapter|\bhub\b", re.I)
+RENAME_GAP = 3600  # a name last heard this long before another first appeared was replaced, not used alongside it
+
+
+def parts_maker(vendor):
+    return bool(vendor and PARTS_MAKERS.search(vendor))
+
+
+def ai_vendor(vendor):
+    """The manufacturer as the AI name reading is told it: a parts maker says so, so it cannot be read as the brand."""
+    if parts_maker(vendor):
+        return "%s (a component/contract maker; the finished product can be any brand)" % vendor
+    return vendor or None
+
+
+def _t(ts):
+    try:
+        return datetime.datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
+    except Exception:
+        return None
+
+
+def replaced(a, b):
+    """True when two (first, last) windows of use do not overlap: one name replaced the other."""
+    (af, al), (bf, bl) = ((_t(x) if x else None for x in w) for w in (a, b))
+    return bool((al and bf and al + RENAME_GAP < bf) or (bl and af and bl + RENAME_GAP < af))
+
+
 class HW(set):
     """Words of the measured hardware (manufacturer + model), plus the run-together form for substring tests."""
 
@@ -274,7 +311,7 @@ def name_tokens(n, extra=()):
 
 def names_hash(names, vendor="", model="", os_family=""):
     """Changes when a device's names (or the hardware they are judged against) change; keys an AI name reading."""
-    return hashlib.sha256(json.dumps([sorted((names or {}).items()), vendor or "", model or "", os_family or ""]).encode()).hexdigest()[:16]
+    return hashlib.sha256(json.dumps([sorted((names or {}).items()), ai_vendor(vendor) or "", model or "", os_family or ""]).encode()).hexdigest()[:16]
 
 
 def owner_hint(claims):
@@ -305,11 +342,16 @@ def name_rivals(shown, claims, manufacturer="", model=""):
     return out
 
 
-def name_check(claims, manufacturer="", model="", os_family="", dhcp_class=""):
+def name_check(claims, manufacturer="", model="", os_family="", dhcp_class="", when=None, notes=None):
     """Reasons to distrust a device's names, as text; [] when they hang together.
     claims is {where the name came from: name}. Two checks: a name that claims a product the hardware is not, and two
-    names that share no identifying word (one device calling itself 'Aiko' here and 'Sam Roku' there)."""
-    flags = []
+    names that share no identifying word (one device calling itself 'Aiko' here and 'Sam Roku' there).
+    when is {source: (first, last)} where known; names never in use at the same time are a rename, not a conflict.
+    Explanations for names that differ without conflicting are appended to notes."""
+    flags, when = [], when or {}
+    notes = notes if notes is not None else []
+    if parts_maker(manufacturer) and not model:
+        manufacturer = ""  # an LG Innotek module says nothing about the brand of the car around it
     hw = " ".join(x or "" for x in (manufacturer, model, os_family)).lower()
     osf = (os_family or "").lower() or ("chromeos" if "chromeos" in (dhcp_class or "").lower() else
                                          "android" if "android" in (dhcp_class or "").lower() else "")
@@ -337,8 +379,20 @@ def name_check(claims, manufacturer="", model="", os_family="", dhcp_class=""):
     done = False
     for x in range(len(toks)):
         for y in range(x + 1, len(toks)):
-            if not done and not agree(toks[x], toks[y]):
-                flags.append("names disagree: %s is '%s', %s is '%s'" % (toks[x][0], toks[x][1], toks[y][0], toks[y][1]))
+            a, b = toks[x], toks[y]
+            if done or agree(a, b):
+                continue
+            ad = [t for t in (a, b) if ADAPTER_NAME.search(t[1])]
+            if ad:
+                other = b if ad[0] is a else a
+                notes.append("'%s' is a dock/adapter name: '%s' (%s) is a device using its network port"
+                             % (ad[0][1], other[1], other[0]))
+            elif a[0] in when and b[0] in when and replaced(when[a[0]], when[b[0]]):
+                old, new = (a, b) if (_t(when[a[0]][1] or "") or 0) < (_t(when[b[0]][1] or "") or 0) else (b, a)
+                notes.append("renamed: '%s' (%s, last heard %s) was replaced by '%s' (%s)"
+                             % (old[1], old[0], (when[old[0]][1] or "?")[:10], new[1], new[0]))
+            else:
+                flags.append("names disagree: %s is '%s', %s is '%s'" % (a[0], a[1], b[0], b[1]))
                 done = True
     return flags
 
@@ -372,6 +426,8 @@ class Idn:
     def name_candidate(self, n, why, source, weight=None):
         n = clean_name(n)
         if good_name(n):
+            if ADAPTER_NAME.search(n):
+                weight = 5  # the dock's own name loses to the name of the device using it
             self.set("name", n, why, source, weight=weight)
             self.claims.setdefault(why.split(" '")[0], n)
 
@@ -656,8 +712,9 @@ def identify(ev):
         i.name_candidate(dh.get("hostname"), "DHCP hostname", "dhcp", 50)
         names.append((dh.get("hostname"), "DHCP hostname"))
 
-    # --- 7. nmap OS guess (only meaningful when the host has open ports)
-    if ports and ev.get("osclass"):
+    # --- 7. nmap OS guess (only meaningful with an open TCP port: a host answering only on UDP, such as mDNS 5353,
+    # gets a fingerprint from closed-port replies that is noise, typically "Aerohive HiveOS")
+    if any(p.get("proto", "tcp") == "tcp" for p in ev.get("ports", [])) and ev.get("osclass"):
         oc = ev["osclass"]
         if oc.get("accuracy", 0) >= 95:
             i.set("os_family", oc.get("osfamily"), "nmap OS detection %s%% (%s)" % (oc["accuracy"], ev.get("os")), "nmap")
@@ -720,8 +777,17 @@ def identify(ev):
             ordered.append(why)
     if conflict:
         ordered.insert(0, conflict)
-    name_flags = name_check(i.claims, out["manufacturer"] or "", out["model"] or "", out["os_family"] or "", dh.get("vendor_class") or "")
-    ordered = name_flags + ordered
+    when = {}
+    if dh.get("hostname"):
+        w = (dh.get("hostnames") or {}).get(dh["hostname"])
+        if w:
+            when["DHCP hostname"] = tuple(w)
+    if ev.get("mdns_host_at"):
+        when["mDNS hostname"] = (None, ev["mdns_host_at"])
+    name_notes = []
+    name_flags = name_check(i.claims, out["manufacturer"] or "", out["model"] or "", out["os_family"] or "",
+                            dh.get("vendor_class") or "", when, name_notes)
+    ordered = name_flags + name_notes + ordered
     return {"model": out["model"], "manufacturer": out["manufacturer"], "os_family": out["os_family"], "type": out["type"],
             "type_source": tsrc if out["type"] else None, "name": out["name"], "confidence": conf if out["type"] else "low",
             "reasons": ordered, "conflict": conflict,

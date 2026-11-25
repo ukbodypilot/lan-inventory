@@ -102,7 +102,8 @@ def passive(mac, hosts):
     ssdp = {"server": s.get("server", ""), "st": s.get("types", [])} if s else {}
     if s.get("description"):
         ssdp["description"] = s["description"]
-    return {"dhcp": h.get("dhcp") or {}, "mdns_records": recs, "mdns_host": host, "ssdp": ssdp,
+    return {"dhcp": h.get("dhcp") or {}, "mdns_records": recs, "mdns_host": host,
+            "mdns_host_at": (m.get("names") or {}).get("%s.local" % host) if host else None, "ssdp": ssdp,
             "mdns_heard": heard, "ssdp_at": s.get("description_at"),
             "ip": h.get("ip"), "ips": h.get("ips") or {}, "last_seen": h.get("last_seen"), "via": h.get("via") or {}}
 

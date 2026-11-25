@@ -188,16 +188,28 @@ def track_names(out):
     prev = jload(path, None)
     known = prev or {}
     events = []
+    # every name each device has used per source: going back to one of them (a dock and the phone in it taking turns
+    # on one MAC) is not news, only a name it has never used before is
+    hist_path = os.path.join(ROOT, "state", "name_history.json")
+    hist = jload(hist_path, {})
     rl_path = os.path.join(ROOT, "state", "relook.json")
     was = set(jload(rl_path, []))
     relook = set(was)
     for d in out:
         mac, old = d["mac"], known.get(d["mac"])
         cur = dict(old or {})
+        used = hist.setdefault(mac, {})
         for src, nm in (d.get("names") or {}).items():
+            seen = used.setdefault(src, [])
+            if old is not None and src in old and name_key(old[src]) not in map(name_key, seen):
+                seen.append(old[src])
             if old is not None and src in old and name_key(old[src]) != name_key(nm):
-                events.append(("renamed", d, "%s changed from '%s' to '%s'" % (src, old[src], nm)))
-                relook.add(mac)  # its other names may have changed too: have quickscan ask it again
+                if name_key(nm) not in map(name_key, seen):
+                    events.append(("renamed", d, "%s changed from '%s' to '%s'" % (src, old[src], nm)))
+                    relook.add(mac)  # its other names may have changed too: have quickscan ask it again
+            if name_key(nm) not in map(name_key, seen):
+                seen.append(nm)
+                del seen[:-8]
             cur[src] = nm
         if prev is not None and old is None and not d.get("aliases"):
             for src, nm in (d.get("names") or {}).items():
@@ -209,6 +221,7 @@ def track_names(out):
         if cur:
             known[mac] = cur
     evidence.jsave(path, known)
+    evidence.jsave(hist_path, hist)
     if relook != was:
         evidence.jsave(rl_path, sorted(relook))
     if not events:
@@ -384,6 +397,7 @@ def main():
         ev = {
             "ports": h.get("ports", []), "scripts": h.get("scripts", {}), "os": h.get("os"), "osclass": h.get("osclass"),
             "mdns_records": recs, "mdns_host": h.get("mdns_host") or pv["mdns_host"], "ssdp": ss,
+            "mdns_host_at": pv.get("mdns_host_at") if (h.get("mdns_host") or pv["mdns_host"]) == pv["mdns_host"] else None,
             "probes": probes, "kasa": h.get("kasa"), "tuya": h.get("tuya"), "dhcp": pdhcp,
             "vendor": vendor, "randomized": rnd, "seed_name": n.get("name_guess"), "router_client": rc,
         }
@@ -397,7 +411,7 @@ def main():
                        reasons=["carried over from %s (that evidence is no longer on hand)" % c["date"]] + c["reasons"][:8])
         elif idn["confidence"] in ("medium", "high") and (idn["model"] or idn["type"]):
             icache[mac] = {k: idn.get(k) for k in ("model", "manufacturer", "os_family", "type", "type_source", "confidence", "name", "reasons")} | {"date": today.isoformat()}
-        has_ports = bool(h.get("ports"))
+        has_ports = any(p.get("proto", "tcp") == "tcp" for p in h.get("ports") or [])  # nmap's OS guess needs a TCP port
         curated = bool(f)
         verified = bool(f.get("type")) or (bool(idn["type"]) and idn["confidence"] in ("high", "medium"))
         reasons = idn["reasons"][:16]

@@ -110,7 +110,7 @@ def refresh(auto=False):
             continue
         h = identify.names_hash(names, d.get("vendor"), d.get("model"), d.get("os_family"))
         if force or (done.get(d["mac"]) or {}).get("hash") != h:
-            todo.append((d["mac"], h, {"manufacturer": d.get("vendor") or None, "model": d.get("model") or None, "type": d.get("type") or None,
+            todo.append((d["mac"], h, {"manufacturer": identify.ai_vendor(d.get("vendor")), "model": d.get("model") or None, "type": d.get("type") or None,
                                        "os": d.get("os_family") or None, "names": names}))
     if not todo or (auto and time.time() - store.get("last_run", 0) < MIN_INTERVAL):
         return 0
