@@ -4,6 +4,10 @@ The version is the git tag. Releases before 2.0.0 were never tagged.
 
 ## Unreleased
 
+## 2.3.0 - 2026-11-25
+
+Name checks that tell a disguise from a dock, a rename or a parts maker.
+
 - **Fewer false name mismatches.** A MAC prefix from a parts or contract maker (LG Innotek, Murata, Pegatron…)
   no longer disproves a brand name, and the AI name reading is told so. A dock's or USB adapter's own name is
   treated as a shared network port: the docked device's name is shown and it is not a conflict. Two names that
