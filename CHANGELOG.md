@@ -4,6 +4,10 @@ The version is the git tag. Releases before 2.0.0 were never tagged.
 
 ## Unreleased
 
+## 2.4.0 - 2026-11-26
+
+One look with the sibling apps, and an Apps menu.
+
 - **One look with its sibling apps.** Every page loads `rig.css`, the "rig front panel" house style
   shared with radio-gateway, tesla-tools and Family Locator (vendored with its fonts in `web/`). The
   patch-panel names now map onto its tokens: amber for links, focus and the selected control, yellow
