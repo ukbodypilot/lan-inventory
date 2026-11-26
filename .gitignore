@@ -3,6 +3,7 @@ venv/
 scans/
 state/
 web/data.json
+web/apps.json
 web/data.json.tmp
 findings.json
 # downloadable reference data (see fetch_data.sh)

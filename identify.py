@@ -250,7 +250,9 @@ NAME_CLAIMS = [(r"apple ?tv|iphone|ipad|macbook|imac|homepod", r"apple|ios|ipado
 PARTS_MAKERS = re.compile(r"lg innotek|murata|azurewave|universal global|usi\b|hon hai|foxconn|pegatron|quanta|compal|"
                           r"wistron|inventec|liteon|lite-on|espressif|realtek|mediatek|qualcomm|broadcom|cypress|"
                           r"texas instruments|silicon labs|shenzhen|hui zhou|tuya|ampak|sercomm|askey|arcadyan|"
-                          r"gaoshengda|chongqing fugui|cloud network technology", re.I)
+                          r"gaoshengda|chongqing fugui|cloud network technology|"
+                          # USB / dock network adapters: the laptop behind them can be any brand
+                          r"belkin|plugable|ugreen|startech|anker|cable matters|asix|j5create|wavlink", re.I)
 # A dock's or USB adapter's own name: the port is shared with whatever is plugged into it, so a second name on the same
 # MAC is a second device, not a disguise ("1AB2CD3-Dell Pro Thunderbolt 4 Smart Dock" and the phone docked in it).
 ADAPTER_NAME = re.compile(r"\bdock\b|thunderbolt|usb[- ]?c?[- ]?(ethernet|lan|nic)|ethernet adapter|\bhub\b", re.I)
@@ -264,7 +266,7 @@ def parts_maker(vendor):
 def ai_vendor(vendor):
     """The manufacturer as the AI name reading is told it: a parts maker says so, so it cannot be read as the brand."""
     if parts_maker(vendor):
-        return "%s (a component/contract maker; the finished product can be any brand)" % vendor
+        return "%s (a component, contract or network-adapter maker; the device behind it can be any brand)" % vendor
     return vendor or None
 
 

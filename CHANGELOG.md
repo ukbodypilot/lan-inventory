@@ -4,6 +4,17 @@ The version is the git tag. Releases before 2.0.0 were never tagged.
 
 ## Unreleased
 
+- **One look with its sibling apps.** Every page loads `rig.css`, the "rig front panel" house style
+  shared with radio-gateway, tesla-tools and Family Locator (vendored with its fonts in `web/`). The
+  patch-panel names now map onto its tokens: amber for links, focus and the selected control, yellow
+  for attention, green link lights, red faults; label tape is cream so it never reads as a warning.
+  Barlow Semi Condensed and JetBrains Mono replace Overpass (removed). **Dark only.** Mesh links are
+  coloured by health (green, yellow when weak). Offline cache bumped to v4.
+- **Apps menu.** A `web/apps.json` (see `web/apps.example.json`, git-ignored) adds an "Apps" menu to the
+  top bar linking your other apps; no file = no menu.
+- **Network adapters can't disprove a brand.** USB and dock network-adapter makers (Belkin, Plugable,
+  UGREEN, StarTech, Anker, ASIX…) join the parts makers: a laptop on a Belkin adapter is not a mismatch.
+
 ## 2.3.0 - 2026-11-25
 
 Name checks that tell a disguise from a dock, a rename or a parts maker.

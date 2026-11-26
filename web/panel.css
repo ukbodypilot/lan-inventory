@@ -1,58 +1,41 @@
-/* lan-inventory — shared theme ("patch panel"). Loaded first by every page.
+/* lan-inventory — page theme ("patch panel"), loaded after rig.css by every page.
 
-   The look borrows from the network closet: rack-steel background,
-   faceplate panels, ink text, and the port LEDs as the only bright
-   colours. Colour carries meaning:
-     --led / --ok   link light: online, healthy
-     --amber        activity/attention: needs a look, warning
-     --red          fault: conflict, mismatch, error
-     --unlit        port with nothing lit: offline, unknown
-     --petrol       interactive: links, focus, the selected control
-     --tape         label-maker tape: something a person labelled by hand
+   Fonts, the --t-* tokens, base elements and the Apps menu come from rig.css: the shared "rig front panel"
+   house style, vendored from radio-gateway. This file maps the patch-panel names onto those tokens and
+   keeps the closet motif (RJ45 jacks, port LEDs, label-maker tape). Dark only. Colour carries meaning:
+     --led / --ok   link light: online, healthy           (rig --t-ok)
+     --amber        attention: needs a look, warning      (rig --t-warn)
+     --red          fault: conflict, mismatch, error      (rig --t-err)
+     --unlit        port with nothing lit: offline        (rig --t-border-hi)
+     --petrol       interactive: links, focus, selected   (rig --t-accent, backlight amber; name kept)
+     --tape         label-maker tape: labelled by hand    (cream, so it never reads as a warning)
    Spend boldness on the patch panel (Devices page); keep the rest quiet.
 
    Two older token vocabularies are aliased at the bottom (index.html used
    --muted/--accent/--s1…, console.css used --mut/--acc/--soft…), so page
    rules keep working; new rules should use the names in the first block. */
 
-@font-face { font-family: 'Overpass'; src: url('fonts/Overpass.woff2') format('woff2-variations'), url('fonts/Overpass.woff2') format('woff2');
-             font-weight: 100 900; font-style: normal; font-display: swap;
-             unicode-range: U+0000-00B6, U+00B8-FFFF; }   /* Overpass's middle dot eats the space after it; let it fall back */
-@font-face { font-family: 'Overpass Mono'; src: url('fonts/OverpassMono.woff2') format('woff2-variations'), url('fonts/OverpassMono.woff2') format('woff2');
-             font-weight: 300 700; font-style: normal; font-display: swap; }
-
 :root {
-  color-scheme: light;
-  --steel: #dde1e5;  --face: #f6f7f8;  --well: #e9ecef;
-  --ink: #15181b;    --ink2: #3a4149;  --mute: #5f6872;
-  --rule: #c5cbd2;   --rule-soft: #e5e8eb;
-  --petrol: #0b6680; --petrol-strong: #084e63; --petrol-soft: #d9eaf0;
-  --led: #17a54b;    --ok: #11793a;    --ok-soft: #dff1e5;  --ok-line: #a6d6b7;
-  --amber: #a66400;  --amber-led: #f0a21a; --amber-soft: #fbefd8; --amber-line: #ebc684; --amber-text: #5a3b0c;
-  --red: #c4281e;    --red-soft: #fbe4e1; --red-line: #eeb1aa;
-  --unlit: #a9b1ba;
-  --jack: #2a2f35;   --jack-hi: #3b424a;   /* empty RJ45 socket */
-  --tape: #f5d339;   --tape-ink: #1b1705;
-  --c-wired: #4d5965; --c-5g: #0b6680; --c-24: #6fb0c4;   /* how devices connect */
+  color-scheme: dark;
+  --steel: var(--t-bg);  --face: var(--t-panel);  --well: var(--t-well);
+  --ink: var(--t-text);  --ink2: color-mix(in srgb, var(--t-text) 72%, var(--t-text-dim));  --mute: var(--t-text-dim);
+  --rule: var(--t-border);  --rule-soft: color-mix(in srgb, var(--t-border) 55%, var(--t-panel));
+  --petrol: var(--t-accent); --petrol-strong: color-mix(in srgb, var(--t-accent) 75%, #fff);
+  --petrol-soft: color-mix(in srgb, var(--t-accent) 14%, var(--t-panel));
+  --led: var(--t-ok);  --ok: var(--t-ok);
+  --ok-soft: color-mix(in srgb, var(--t-ok) 13%, var(--t-panel));  --ok-line: color-mix(in srgb, var(--t-ok) 40%, var(--t-border));
+  --amber: var(--t-warn);  --amber-led: var(--t-warn);
+  --amber-soft: color-mix(in srgb, var(--t-warn) 13%, var(--t-panel));  --amber-line: color-mix(in srgb, var(--t-warn) 40%, var(--t-border));
+  --amber-text: color-mix(in srgb, var(--t-warn) 70%, var(--t-text));
+  --red: var(--t-err);
+  --red-soft: color-mix(in srgb, var(--t-err) 14%, var(--t-panel));  --red-line: color-mix(in srgb, var(--t-err) 40%, var(--t-border));
+  --unlit: var(--t-border-hi);
+  --jack: #0b0c0e;   --jack-hi: #24282d;   /* empty RJ45 socket */
+  --tape: #e6dfcc;   --tape-ink: #1b1705;
+  --c-wired: #9aa6b2; --c-5g: #52b8d4; --c-24: #2c7389;   /* how devices connect: data colours, not status */
 
-  --font: 'Overpass', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'Overpass Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  --r: 5px;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --steel: #111315;  --face: #1a1d20;  --well: #141619;
-    --ink: #e8ebee;    --ink2: #c2c8cf;  --mute: #939ca6;
-    --rule: #2c3136;   --rule-soft: #22262a;
-    --petrol: #52b8d4; --petrol-strong: #93d6e8; --petrol-soft: #14303a;
-    --led: #36d36f;    --ok: #4bd17c;    --ok-soft: #12301d;  --ok-line: #285c3a;
-    --amber: #f2b13c;  --amber-led: #f2b13c; --amber-soft: #33270f; --amber-line: #5d4520; --amber-text: #f0d7aa;
-    --red: #ff6f62;    --red-soft: #3a1c19; --red-line: #6a2c26;
-    --unlit: #454d56;
-    --jack: #0b0c0e;   --jack-hi: #24282d;
-    --c-wired: #9aa6b2; --c-5g: #52b8d4; --c-24: #2c7389;
-  }
+  --font: var(--font-base);
+  --r: var(--r-md);
 }
 
 /* ── aliases: index.html vocabulary ─────────────────────────────── */
@@ -70,7 +53,7 @@
   --warn-strong: var(--amber); --warn-text: var(--amber-text); --warn-bg: var(--amber-soft); --warn-line: var(--amber-line);
   --ok-bg: var(--ok-soft); --bad: var(--red); --bad-bg: var(--red-soft); --bad-line: var(--red-line);
   --off-bg: var(--rule-soft); --off-line: var(--unlit); --toggle-off: var(--unlit);
-  --hero: var(--ink); --hero-fg: var(--face); --hero-mut: var(--rule);
+  --hero: var(--t-glass); --hero-fg: var(--t-accent); --hero-mut: var(--t-text-dim);   /* rig .hero: smoked glass, amber type */
 }
 
 /* ── shared primitives ──────────────────────────────────────────── */
@@ -78,7 +61,7 @@ html { -webkit-text-size-adjust: 100%; }
 body { font-family: var(--font); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
 .mono, code, kbd { font-family: var(--font-mono); }
 :focus-visible { outline: 2px solid var(--petrol); outline-offset: 2px; }
-::selection { background: var(--petrol); color: var(--face); }
+::selection { background: var(--petrol); color: var(--t-glass); }
 
 /* Label-maker tape: only for things a person labelled by hand. */
 .tape {

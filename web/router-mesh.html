@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mesh · LAN Console</title>
-<link rel="stylesheet" href="panel.css">
+<link rel="stylesheet" href="rig.css"><link rel="stylesheet" href="panel.css">
 <link rel="stylesheet" href="nav.css">
 <link rel="stylesheet" href="console.css">
 <style>
@@ -31,13 +31,13 @@
   .tier .ncard.gw { flex: 0 0 240px; } .tier .ncard.inet { flex: 0 0 200px; }
   .ncard.gw .mono, .ncard.gw .lk { color: var(--hero-mut); }
   .ncard.inet { width: 200px; text-align: center; }
-  .edges .wired { stroke: var(--acc); stroke-width: 3; fill: none; }
-  .edges .wless { stroke: var(--acc); stroke-width: 3; stroke-dasharray: 6 6; fill: none; }
+  .edges .wired { stroke: var(--ok); stroke-width: 3; fill: none; }   /* link lights: green healthy, yellow weak */
+  .edges .wless { stroke: var(--ok); stroke-width: 3; stroke-dasharray: 6 6; fill: none; }
   .edges .weak { stroke: var(--warn); stroke-width: 3; stroke-dasharray: 6 6; fill: none; }
   .edges .off { stroke: var(--off-line); stroke-width: 2; stroke-dasharray: 3 6; fill: none; }
   .edges .up { stroke: var(--fg); stroke-width: 2; fill: none; }
   .narrow { display: none; list-style: none; margin: 0; padding: 0; }
-  .narrow li { margin: 0 0 10px calc(var(--d) * 18px); padding-left: 12px; border-left: 3px solid var(--acc); }
+  .narrow li { margin: 0 0 10px calc(var(--d) * 18px); padding-left: 12px; border-left: 3px solid var(--ok); }
   .narrow li.wless { border-left-style: dashed; } .narrow li.weak { border-left: 3px dashed var(--warn); }
   .narrow li.off { border-left: 3px dotted var(--off-line); } .narrow li.root { border-left-color: transparent; padding-left: 0; }
   .narrow .ncard, .narrow .ncard.gw, .narrow .ncard.inet { width: auto; text-align: left; }
@@ -54,8 +54,8 @@
     <div class="cardhead">
       <h2 id="map-h">Topology</h2><span class="mut small" id="summary"></span>
       <div class="legendbox end" aria-label="Legend">
-        <span><svg width="28" height="6" aria-hidden="true"><line x1="1" y1="3" x2="27" y2="3" stroke="var(--acc)" stroke-linecap="round"/></svg>Wired backhaul</span>
-        <span><svg width="28" height="6" aria-hidden="true"><line x1="1" y1="3" x2="27" y2="3" stroke="var(--acc)" stroke-dasharray="6 6"/></svg>Wireless</span>
+        <span><svg width="28" height="6" aria-hidden="true"><line x1="1" y1="3" x2="27" y2="3" stroke="var(--ok)" stroke-linecap="round"/></svg>Wired backhaul</span>
+        <span><svg width="28" height="6" aria-hidden="true"><line x1="1" y1="3" x2="27" y2="3" stroke="var(--ok)" stroke-dasharray="6 6"/></svg>Wireless</span>
         <span><svg width="28" height="6" aria-hidden="true"><line x1="1" y1="3" x2="27" y2="3" stroke="var(--warn)" stroke-dasharray="6 6"/></svg>Weak wireless</span>
         <span><svg width="28" height="6" aria-hidden="true"><line x1="1" y1="3" x2="27" y2="3" stroke="var(--off-line)" stroke-dasharray="3 6"/></svg>Offline</span>
       </div>
@@ -78,7 +78,7 @@
     </table></div>
   </section>
 </main>
-<script src="console.js"></script>
+<script src="rig-apps.js"></script><script src="console.js"></script>
 <script>
 (function () {
   'use strict';

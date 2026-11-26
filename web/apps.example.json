@@ -1,0 +1,5 @@
+[
+  { "name": "Radio gateway", "url": "http://192.0.2.10:8080/" },
+  { "name": "LAN Console", "url": "http://192.0.2.10:8480/" },
+  { "name": "Family Locator", "url": "http://192.0.2.10:8790/" }
+]

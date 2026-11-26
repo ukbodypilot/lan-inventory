@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LAN Inventory</title>
-<link rel="stylesheet" href="panel.css">
+<link rel="stylesheet" href="rig.css"><link rel="stylesheet" href="panel.css">
 <style>
   /* Devices page. Tokens and fonts come from panel.css. */
   * { box-sizing: border-box; }
@@ -54,8 +54,8 @@
   button.stat { cursor: pointer; } button.stat:hover { border-color: var(--petrol); }
   .stat b { font-size: 18px; font-weight: 700; color: var(--fg); }
   .stat .foot { font-size: 12.5px; color: var(--muted); }
-  .stat[aria-pressed=true] { background: var(--ink); border-color: var(--ink); color: var(--face); }
-  .stat[aria-pressed=true] b, .stat[aria-pressed=true] .foot { color: var(--face); }
+  .stat[aria-pressed=true] { background: var(--t-btn-active); border-color: var(--t-accent); color: var(--t-accent); }
+  .stat[aria-pressed=true] b, .stat[aria-pressed=true] .foot { color: var(--t-accent); }
   .meter { width: 64px; height: 6px; border-radius: 1px; background: var(--rule-soft); overflow: hidden; }
   .meter i { display: block; height: 100%; background: var(--ink2); }
 
@@ -70,7 +70,7 @@
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: var(--card); }
   .seg button { border: 0; background: transparent; color: var(--fg2); font: inherit; font-size: 13.5px; padding: 0 12px; min-height: 40px; cursor: pointer; }
   .seg button + button { border-left: 1px solid var(--line); }
-  .seg button[aria-pressed=true] { background: var(--ink); color: var(--face); font-weight: 600; }
+  .seg button[aria-pressed=true] { background: var(--t-btn-active); border-color: var(--t-accent); color: var(--t-accent); font-weight: 600; }
   #range button { min-height: 28px; font-size: 12.5px; padding: 0 10px; }
   button:focus-visible, tr.row:focus-visible { outline: 2px solid var(--petrol); outline-offset: 2px; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
@@ -78,7 +78,7 @@
           font: inherit; font-size: 13.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
   .chip:hover { border-color: var(--petrol); }
   .chip svg { width: 15px; height: 15px; }
-  .chip[aria-pressed=true] { background: var(--ink); border-color: var(--ink); color: var(--face); }
+  .chip[aria-pressed=true] { background: var(--t-btn-active); border-color: var(--t-accent); color: var(--t-accent); }
   .chip .n { opacity: .65; }
 
   /* ── Device list ── */
@@ -142,7 +142,7 @@
   .morebtn { border: 0; background: none; color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; padding: 6px 0 0; text-align: left; }
   svg text { font: 11.5px var(--font); fill: var(--muted); }
   .chartwrap { position: relative; }
-  .tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--face); font-size: 12.5px; padding: 5px 8px; border-radius: 3px; white-space: nowrap; transform: translate(-50%, -100%); display: none; z-index: 8; }
+  .tip { position: absolute; pointer-events: none; background: var(--t-panel-hi); color: var(--t-text); border: 1px solid var(--t-border-hi); box-shadow: 0 6px 18px rgba(0,0,0,.5); font-size: 12.5px; padding: 5px 8px; border-radius: 3px; white-space: nowrap; transform: translate(-50%, -100%); display: none; z-index: 8; }
   .tip b { font-weight: 700; }
   .bars { display: grid; grid-template-columns: auto 1fr auto; gap: 5px 10px; align-items: center; font-size: 13.5px; }
   .bars button { display: contents; cursor: pointer; font: inherit; color: inherit; }
@@ -180,7 +180,9 @@
 <header class="topbar"><div class="tb-in">
   <a class="tb-brand" href="index.html"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5v4M12 11.5l-5.5 5.5M12 11.5l5.5 5.5"/></svg><span>LAN Console</span></a>
   <nav aria-label="Sections"><a href="index.html" aria-current="page">Devices</a><a href="router.html">Router</a><a href="ping.html">Ping</a><a href="logs.html">Logs</a></nav>
+  <div class="rig-apps" hidden></div>
 </div></header>
+<script src="rig-apps.js"></script><script>RigApps.load("apps.json", "LAN Console")</script>
 <main>
   <div class="head">
     <h1>Devices</h1>

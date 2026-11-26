@@ -1,29 +1,30 @@
-/* Top bar shared by every page — the rack's top rail: a dark band in both
-   themes, so the pages below read as faceplates mounted under it.
-   Tokens come from panel.css. */
+/* Top bar shared by every page: the same bar as rig.css .rig-top and the radio gateway's
+   #shell-bar (graphite band, dim menus, amber underline on the lit one). Tokens come from rig.css. */
 .topbar {
-  --nv-bg: #16191c; --nv-line: #000; --nv-fg: #f1f3f5; --nv-mut: #a2acb6; --nv-acc: #7fd0e6;
+  --nv-bg: color-mix(in srgb, var(--t-panel) 70%, var(--t-bg)); --nv-line: #0d0f10;
+  --nv-fg: var(--t-text); --nv-mut: var(--t-text-dim); --nv-acc: var(--t-accent);
   background: var(--nv-bg); border-bottom: 1px solid var(--nv-line); color: var(--nv-fg);
-  box-shadow: inset 0 -3px 0 #23282d;
-  font: 15px/1.45 var(--font, system-ui, sans-serif);
+  box-shadow: inset 0 -1px 0 var(--t-border);
+  font: 15px/1.45 var(--font-base);
 }
-@media (prefers-color-scheme: dark) { .topbar { --nv-bg: #0b0c0e; } }
 .topbar .tb-in { max-width: 1240px; margin: 0 auto; padding: 0 16px; min-height: 54px; box-sizing: border-box;
                  display: flex; flex-wrap: wrap; align-items: stretch; gap: 0 28px; }
 .topbar .tb-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; letter-spacing: .01em;
                     color: inherit; text-decoration: none; }
 .topbar .tb-brand svg { stroke: var(--nv-acc); }
 .topbar nav { display: flex; flex-wrap: wrap; gap: 0; align-items: stretch; }
-.topbar nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 3px 14px 0;
-                color: var(--nv-mut); text-decoration: none; font-size: 15px; border-bottom: 3px solid transparent; }
+.topbar nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 2px var(--s-3) 0;
+                color: var(--nv-mut); text-decoration: none; font-size: var(--f-md); font-weight: 500; border-bottom: 2px solid transparent; }
 .topbar nav a:hover { color: var(--nv-fg); }
-.topbar nav a[aria-current=page] { color: var(--nv-fg); font-weight: 600; border-bottom-color: var(--nv-acc); }
+.topbar nav a[aria-current=page] { color: var(--nv-acc); border-bottom-color: var(--nv-acc); }
 .topbar nav a:focus-visible, .topbar button:focus-visible { outline: 2px solid var(--nv-acc); outline-offset: -2px; }
 .topbar .tb-side { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
                    font-size: 13px; color: var(--nv-mut); padding: 8px 0; }
-.topbar .tb-side button { min-height: 34px; padding: 0 14px; border-radius: 4px; border: 1px solid #3a4148;
-                          background: #22272c; color: var(--nv-fg); font: inherit; cursor: pointer; }
-.topbar .tb-side button:hover { border-color: var(--nv-acc); }
+.topbar .tb-side button { min-height: 34px; padding: 0 14px; border-radius: var(--r-sm); border: 1px solid var(--t-btn-border);
+                          border-bottom-color: color-mix(in srgb, var(--t-btn-border) 60%, #000); background: var(--t-btn);
+                          box-shadow: inset 0 1px 0 rgba(255,255,255,.05); color: var(--nv-fg); font: inherit; cursor: pointer; }
+.topbar .tb-side button:hover { background: var(--t-btn-hover); border-color: var(--t-border-hi); }
+.topbar .rig-apps { align-self: stretch; }
 .topbar .tb-side button:disabled { opacity: .6; cursor: progress; }
 @media (max-width: 640px) {
   .topbar .tb-in { gap: 0 12px; }

@@ -97,6 +97,7 @@ class Names(unittest.TestCase):
     def test_parts_maker_cannot_disprove_a_brand(self):
         self.assertEqual(identify.name_check({"DHCP hostname": "Garage_iPhone"}, "Murata Manufacturing"), [])
         self.assertIn("component", identify.ai_vendor("LG Innotek"))
+        self.assertIn("adapter", identify.ai_vendor("Belkin International Inc."))  # a USB NIC, not the laptop's brand
         self.assertEqual(identify.ai_vendor("Apple, Inc."), "Apple, Inc.")
         f = identify.name_check({"AirPlay device name": "Den Apple TV"}, "Roku", "Roku Express 4K+ (3941X2)", "Roku OS")
         self.assertTrue(f)  # a real brand maker still disproves it

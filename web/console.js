@@ -344,7 +344,8 @@
     return '<div class="tb-in"><a class="tb-brand" href="index.html">' + LOGO + '<span>LAN Console</span></a>' +
       '<nav aria-label="Sections">' + SECTIONS.map(function (s) {
         return '<a href="' + s[1] + '"' + (s[0] === section ? ' aria-current="page"' : '') + '>' + s[2] + '</a>';
-      }).join('') + '</nav><div class="tb-side" id="tbside">' + (sideHtml || '') + '</div></div>';
+      }).join('') + '</nav><div class="tb-side" id="tbside">' + (sideHtml || '') + '</div>' +
+      '<div class="rig-apps" hidden></div></div>';
   };
 
   // Router pages: top bar with snapshot age + "Refresh now", and the Overview/Mesh/Clients/Settings tabs.
@@ -354,6 +355,7 @@
     top.innerHTML = LC.topbar('router', '<span id="snapage" aria-live="polite">Loading…</span>' +
       '<button type="button" id="refresh" title="Full read over the router\'s control port (settings, signal, speeds). Runs hourly by itself; the 5-minute snapshots use the web interface.">Refresh now</button>');
     document.body.insertBefore(top, document.body.firstChild);
+    if (window.RigApps) RigApps.load('apps.json', 'LAN Console');
     LC.$('pagehead').innerHTML = '<h1>' + esc(title) + '</h1><nav class="subnav" aria-label="Router pages">' +
       ROUTER_PAGES.map(function (p) { return '<a href="' + p[1] + '"' + (p[0] === page ? ' aria-current="page"' : '') + '>' + p[2] + '</a>'; }).join('') + '</nav>';
 
@@ -409,6 +411,7 @@
     var top = document.createElement('header'); top.className = 'topbar';
     top.innerHTML = LC.topbar(section, '');
     document.body.insertBefore(top, document.body.firstChild);
+    if (window.RigApps) RigApps.load('apps.json', 'LAN Console');
   };
 
   LC.qs = function (k) { return new URLSearchParams(location.search).get(k); };
